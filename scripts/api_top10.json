@@ -1,0 +1,72 @@
+[
+  {
+    "FundName": "アジア好配当株投信",
+    "FundCode": "0131106B",
+    "TotalAssetValue": null,
+    "DetailUrl": "//www.nomura-am.co.jp/fund/funddetail.php?fundcd=140380",
+    "IsETF": null
+  },
+  {
+    "FundName": "インデックス・ブレンド(タイプI)　愛称:My Funds-i",
+    "FundCode": "01314171",
+    "TotalAssetValue": null,
+    "DetailUrl": "//www.nomura-am.co.jp/fund/funddetail.php?fundcd=140689",
+    "IsETF": null
+  },
+  {
+    "FundName": "インデックス・ブレンド(タイプII)　愛称:My Funds-i",
+    "FundCode": "01315171",
+    "TotalAssetValue": null,
+    "DetailUrl": "//www.nomura-am.co.jp/fund/funddetail.php?fundcd=140690",
+    "IsETF": null
+  },
+  {
+    "FundName": "インデックス・ブレンド(タイプIII)　愛称:My Funds-i",
+    "FundCode": "01316171",
+    "TotalAssetValue": null,
+    "DetailUrl": "//www.nomura-am.co.jp/fund/funddetail.php?fundcd=140691",
+    "IsETF": null
+  },
+  {
+    "FundName": "インデックス・ブレンド(タイプIV)　愛称:My Funds-i",
+    "FundCode": "01317171",
+    "TotalAssetValue": null,
+    "DetailUrl": "//www.nomura-am.co.jp/fund/funddetail.php?fundcd=140692",
+    "IsETF": null
+  },
+  {
+    "FundName": "インデックス・ブレンド(タイプV)　愛称:My Funds-i",
+    "FundCode": "01318171",
+    "TotalAssetValue": null,
+    "DetailUrl": "//www.nomura-am.co.jp/fund/funddetail.php?fundcd=140693",
+    "IsETF": null
+  },
+  {
+    "FundName": "ウエリントン・企業価値共創世界株ファンド Aコース(野村SMA・EW向け)",
+    "FundCode": "01312248",
+    "TotalAssetValue": null,
+    "DetailUrl": "//www.nomura-am.co.jp/fund/funddetail.php?fundcd=180378",
+    "IsETF": null
+  },
+  {
+    "FundName": "ウエリントン・企業価値共創世界株ファンド Aコース(米ドル売り円買い)",
+    "FundCode": "01311238",
+    "TotalAssetValue": null,
+    "DetailUrl": "//www.nomura-am.co.jp/fund/funddetail.php?fundcd=180371",
+    "IsETF": null
+  },
+  {
+    "FundName": "ウエリントン・企業価値共創世界株ファンド Bコース(為替ヘッジなし)",
+    "FundCode": "01312238",
+    "TotalAssetValue": null,
+    "DetailUrl": "//www.nomura-am.co.jp/fund/funddetail.php?fundcd=180372",
+    "IsETF": null
+  },
+  {
+    "FundName": "ウエリントン・企業価値共創世界株ファンド Bコース(野村SMA・EW向け)",
+    "FundCode": "01313248",
+    "TotalAssetValue": null,
+    "DetailUrl": "//www.nomura-am.co.jp/fund/funddetail.php?fundcd=180379",
+    "IsETF": null
+  }
+]

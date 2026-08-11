@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ファンド・ベンチマーク抽出アプリ 使い方説明書</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Hiragino Kaku Gothic ProN', 'Helvetica Neue', Arial, 'Yu Gothic', sans-serif;
+    background: #f4f6f9; color: #1f2430; line-height: 1.75;
+  }
+
+  /* Layout: sidebar + content */
+  .wrap { display: flex; max-width: 1180px; margin: 0 auto; }
+  nav.toc {
+    width: 250px; flex-shrink: 0; position: sticky; top: 0; align-self: flex-start;
+    height: 100vh; overflow-y: auto; padding: 28px 18px; background: #002b4e;
+  }
+  nav.toc .logo { color: #7fb2e0; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 4px; }
+  nav.toc h2 { color: #fff; font-size: 15px; margin-bottom: 18px; line-height: 1.4; }
+  nav.toc a {
+    display: block; color: #b9cfe4; text-decoration: none; font-size: 13px;
+    padding: 7px 10px; border-radius: 6px; margin-bottom: 2px; transition: all .15s;
+  }
+  nav.toc a:hover { background: rgba(255,255,255,0.1); color: #fff; }
+  nav.toc a.sub { padding-left: 22px; font-size: 12px; color: #92aecb; }
+
+  main { flex: 1; padding: 40px 48px; min-width: 0; }
+
+  header.page-head {
+    background: linear-gradient(135deg, #003366 0%, #0066b3 100%);
+    color: white; padding: 32px 36px; border-radius: 12px; margin-bottom: 28px;
+  }
+  header.page-head .tag { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.75; margin-bottom: 8px; }
+  header.page-head h1 { font-size: 25px; margin-bottom: 10px; }
+  header.page-head p { font-size: 14px; opacity: 0.9; }
+
+  section { margin-bottom: 40px; scroll-margin-top: 20px; }
+  h2.sec {
+    font-size: 20px; color: #003366; margin-bottom: 16px;
+    padding-bottom: 8px; border-bottom: 3px solid #0066b3;
+  }
+  h2.sec .n {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; background: #0066b3; color: white;
+    border-radius: 8px; font-size: 15px; margin-right: 10px; vertical-align: middle;
+  }
+  h3.sub { font-size: 16px; color: #0066b3; margin: 22px 0 10px; }
+
+  p { margin-bottom: 12px; font-size: 14.5px; }
+
+  .card {
+    background: white; border-radius: 10px; padding: 20px 24px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin-bottom: 16px;
+  }
+
+  .lead {
+    background: #eaf3ff; border-left: 4px solid #0066b3;
+    padding: 16px 20px; border-radius: 0 8px 8px 0; margin-bottom: 16px; font-size: 14.5px;
+  }
+  .lead b { color: #003366; }
+
+  .callout {
+    background: #fff8e6; border-left: 4px solid #e8a000;
+    padding: 14px 18px; border-radius: 0 8px 8px 0; margin: 14px 0; font-size: 13.5px;
+  }
+  .callout.tip { background: #e9f7ef; border-left-color: #1a9d50; }
+  .callout b { color: #8a5c00; }
+  .callout.tip b { color: #14703a; }
+
+  ul, ol { margin: 0 0 14px 22px; }
+  li { font-size: 14.5px; margin-bottom: 6px; }
+
+  /* Flow steps */
+  .steps { counter-reset: step; margin-bottom: 16px; }
+  .step {
+    background: white; border-radius: 10px; padding: 14px 18px 14px 56px;
+    box-shadow: 0 1px 5px rgba(0,0,0,0.06); margin-bottom: 10px; position: relative;
+  }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+    width: 28px; height: 28px; background: #0066b3; color: white;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px;
+  }
+  .step b { color: #003366; }
+
+  /* Code blocks */
+  pre {
+    background: #1e2733; color: #e6edf3; border-radius: 8px;
+    padding: 16px 18px; overflow-x: auto; margin: 12px 0; font-size: 13px;
+    line-height: 1.6; font-family: 'SF Mono', Consolas, monospace;
+  }
+  code.inline {
+    background: #eef1f5; color: #c0392b; padding: 2px 6px;
+    border-radius: 4px; font-size: 13px; font-family: 'SF Mono', Consolas, monospace;
+  }
+  pre .c { color: #7d8fa3; } /* comment */
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13.5px; background: white; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 5px rgba(0,0,0,0.06); }
+  th { background: #003366; color: white; padding: 10px 12px; text-align: left; font-size: 12.5px; }
+  td { padding: 10px 12px; border-bottom: 1px solid #eef0f3; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #f7fbff; }
+  td b, th b { font-weight: 700; }
+  .hl { background: #fff3d6 !important; }
+
+  /* ASCII diagram */
+  .diagram {
+    background: #1e2733; color: #9ecbff; border-radius: 8px; padding: 18px 20px;
+    font-family: 'SF Mono', Consolas, monospace; font-size: 12.5px; line-height: 1.5;
+    overflow-x: auto; margin: 14px 0; white-space: pre;
+  }
+
+  /* Template box (copy-paste) */
+  .tmpl {
+    background: #f0f4f8; border: 1px dashed #6b93bd; border-radius: 8px;
+    padding: 0; margin: 14px 0; overflow: hidden;
+  }
+  .tmpl .tmpl-head {
+    background: #dbe6f1; color: #003366; padding: 8px 16px; font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tmpl pre { margin: 0; border-radius: 0; background: #263340; }
+
+  .pill { display:inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+  .pill-msci { background: #fde8e8; color: #c0392b; }
+  .pill-keep { background: #e0f5e9; color: #1a7340; }
+  .pill-change { background: #fef3dc; color: #8a5c00; }
+
+  footer { text-align: center; color: #9aa5b1; font-size: 12px; padding: 24px 0; }
+
+  @media (max-width: 820px) {
+    nav.toc { display: none; }
+    main { padding: 24px 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Sidebar TOC -->
+  <nav class="toc">
+    <div class="logo">MSCI Sales Intelligence</div>
+    <h2>ファンド・ベンチマーク<br>抽出アプリ 説明書</h2>
+    <a href="#s1">1. このアプリは何をするもの？</a>
+    <a href="#s2">2. 処理の流れ</a>
+    <a href="#s3">3. 用意するもの</a>
+    <a href="#s4">4. セットアップ手順</a>
+    <a href="#s5">5. 基本の使い方</a>
+    <a href="#s6">6. 出力表の見方</a>
+    <a href="#s7">7. うまくいかないとき</a>
+    <a href="#s8">8. 他ファンドへの応用</a>
+    <a href="#s8a" class="sub">└ Claudeへの指示</a>
+    <a href="#s8b" class="sub">└ Cursorへの指示</a>
+    <a href="#s9">9. 用語集</a>
+  </nav>
+
+  <main>
+    <header class="page-head">
+      <div class="tag">User Manual</div>
+      <h1>ファンド・ベンチマーク抽出アプリ 使い方説明書</h1>
+      <p>開発者でない方が読んでも全体像がわかり、実際に動かす人や Cursor にそのまま渡せることを目指した説明書です。</p>
+    </header>
+
+    <div class="card" style="margin-bottom:28px;">
+      <b style="color:#003366;">📁 関連ファイル（セットで使います）</b>
+      <ul style="margin-top:8px; margin-bottom:0;">
+        <li><code class="inline">nomura_benchmark_scraper_spec.md</code> … 開発仕様書（アプリの設計図）</li>
+        <li><code class="inline">benchmark_extraction_improvement.md</code> … ベンチマーク抽出の改善版ロジック</li>
+        <li><b>本書</b> … アプリの使い方と、他社ファンドへの応用方法</li>
+      </ul>
+    </div>
+
+    <!-- SECTION 1 -->
+    <section id="s1">
+      <h2 class="sec"><span class="n">1</span>このアプリは何をするもの？</h2>
+      <div class="lead">
+        <b>ひとことで言うと：</b>野村アセットマネジメントの投資信託について、「その商品がどの指数（ベンチマーク）を使っているか」を、公式PDF（交付目論見書）から自動で読み取って、一覧表（Excel/CSV）にするアプリです。
+      </div>
+      <p><b>なぜ必要か：</b>MSCIの営業では、「純資産（AUM）が大きいのに、まだMSCI以外の指数を使っているファンド」を見つけることが重要です。数百本のファンドのPDFを人が1本ずつ開いて確認するのは大変なので、その作業を自動化します。</p>
+      <p><b>何が出てくるか：</b>ファンド名・純資産・ベンチマーク指数・指数の提供会社（MSCI / TOPIX / 日経 など）・MSCI採用かどうか、が並んだ表が出力されます。この表を見れば、営業でどこを攻めるべきかが一目でわかります。</p>
+      <div class="diagram">【入力】野村の公式サイト（AUM上位100本）
+   ↓  自動でPDFを取得して読み取り
+【出力】Excel/CSV の一覧表
+   ┌──────────┬────────┬──────────────┬──────────┬────────┐
+   │ ファンド名  │ 純資産  │ ベンチマーク    │ 提供会社  │ MSCI？  │
+   ├──────────┼────────┼──────────────┼──────────┼────────┤
+   │ ○○ファンド │ 1兆円  │ MSCIコクサイ   │ MSCI     │ はい    │
+   │ △△ETF     │ 3兆円  │ TOPIX         │ 東証      │ いいえ  │ ← 攻めどころ
+   └──────────┴────────┴──────────────┴──────────┴────────┘</div>
+    </section>
+
+    <!-- SECTION 2 -->
+    <section id="s2">
+      <h2 class="sec"><span class="n">2</span>アプリの処理の流れ</h2>
+      <p>技術がわからなくても、この6段階だけ知っておけば十分です。</p>
+      <div class="steps">
+        <div class="step"><b>一覧を取る</b>：公式サイトから、純資産の大きい順に上位100本のファンド名を取得</div>
+        <div class="step"><b>PDFの場所を探す</b>：各ファンドの詳細ページから「交付目論見書」PDFのURLを取得</div>
+        <div class="step"><b>PDFを保存</b>：そのPDFをダウンロード</div>
+        <div class="step"><b>文字にする</b>：PDFから文章を取り出す（画像の場合はOCRで読み取る）</div>
+        <div class="step"><b>指数を読み取る</b>：文章から「○○に連動」「○○をベンチマーク」を見つけて指数名を特定</div>
+        <div class="step"><b>表にする</b>：Excel/CSVに整形して出力</div>
+      </div>
+      <div class="callout tip"><b>💡 途中で失敗しても大丈夫：</b>成功した段階までは保存されるので、もう一度実行すれば続きから再開できます。</div>
+    </section>
+
+    <!-- SECTION 3 -->
+    <section id="s3">
+      <h2 class="sec"><span class="n">3</span>動かす前に用意するもの</h2>
+      <p>実際にアプリを動かす担当者向けです。営業・企画の方はここは読み飛ばしてOKです。</p>
+      <div class="card">
+        <ul style="margin-bottom:0;">
+          <li><b>Python 3.11 以上</b></li>
+          <li><b>必要な部品（ライブラリ）</b>：<code class="inline">requirements.txt</code> に記載（Playwright, PyMuPDF, pytesseract, pandas など）</li>
+          <li><b>OCR用ソフト</b>：Tesseract（日本語データ <code class="inline">jpn</code>）と poppler</li>
+          <li><b>Anthropic APIキー</b>：指数の読み取りにAIを使用。環境変数 <code class="inline">ANTHROPIC_API_KEY</code> に設定</li>
+          <li><b>インターネット接続</b>：野村サイトへのアクセスに必要</li>
+        </ul>
+      </div>
+      <div class="callout"><b>⚠️ 注意：</b>APIキーはコードに直接書かず、必ず環境変数か <code class="inline">.env</code> ファイルに入れてください（社外に漏らさないため）。</div>
+    </section>
+
+    <!-- SECTION 4 -->
+    <section id="s4">
+      <h2 class="sec"><span class="n">4</span>セットアップ手順（初回だけ）</h2>
+      <pre><span class="c"># 1. プロジェクトのフォルダに移動</span>
+cd nomura-benchmark-scraper
+
+<span class="c"># 2. 必要な部品をインストール</span>
+pip install -r requirements.txt
+
+<span class="c"># 3. ブラウザ部品を入れる（Playwrightを使う場合）</span>
+playwright install chromium
+
+<span class="c"># 4. APIキーを設定（.env.example をコピーして .env を作り、キーを記入）</span>
+cp .env.example .env
+<span class="c">#   .env を開いて ANTHROPIC_API_KEY=... を記入</span></pre>
+      <p>Tesseract と poppler は OS ごとに入れ方が異なります（例：Mac は <code class="inline">brew install tesseract tesseract-lang poppler</code>）。詳細は <code class="inline">README.md</code> を参照してください。</p>
+    </section>
+
+    <!-- SECTION 5 -->
+    <section id="s5">
+      <h2 class="sec"><span class="n">5</span>基本の使い方</h2>
+      <h3 class="sub">いちばん簡単な方法（全部いっぺんに）</h3>
+      <pre>python -m app.run</pre>
+      <p>これだけで「一覧取得 → PDF取得 → 文字化 → 指数抽出 → 表出力」まで通しで実行され、最後に <code class="inline">output/nomura_benchmarks.xlsx</code> と <code class="inline">.csv</code> ができます。</p>
+
+      <h3 class="sub">段階ごとに実行したいとき（デバッグや部分的なやり直し）</h3>
+      <pre>python -m app.stage1_list          <span class="c"># 一覧だけ取得</span>
+python -m app.stage2_pdf_url       <span class="c"># PDFのURLだけ取得</span>
+python -m app.stage3_download      <span class="c"># PDFのダウンロードだけ</span>
+python -m app.stage4_extract_text  <span class="c"># 文字化だけ</span>
+python -m app.stage5_benchmark     <span class="c"># 指数の読み取りだけ</span>
+python -m app.stage6_output        <span class="c"># 表の出力だけ</span></pre>
+      <div class="callout tip"><b>💡 本数を変えたいとき：</b>上位100本ではなく50本にしたい等は設定ファイル（または起動時オプション）で指定します。実装に合わせて <code class="inline">README.md</code> の「設定」欄を確認してください。</div>
+    </section>
+
+    <!-- SECTION 6 -->
+    <section id="s6">
+      <h2 class="sec"><span class="n">6</span>出力ファイル（表）の見方</h2>
+      <p><code class="inline">output/nomura_benchmarks.xlsx</code> の主な列と、営業での使い方です。</p>
+      <table>
+        <thead><tr><th>列名</th><th>意味</th><th>営業での見方</th></tr></thead>
+        <tbody>
+          <tr><td><code class="inline">rank</code></td><td>純資産の順位</td><td>上位ほど影響が大きい</td></tr>
+          <tr><td><code class="inline">fund_name</code></td><td>ファンド名</td><td>—</td></tr>
+          <tr><td><code class="inline">aum</code></td><td>純資産総額</td><td>大きいほど重要顧客</td></tr>
+          <tr><td><code class="inline">fund_type</code></td><td>インデックス型／アクティブ型／バランス型 など</td><td>—</td></tr>
+          <tr><td><code class="inline">benchmark</code></td><td>使っている指数の名前</td><td>—</td></tr>
+          <tr><td><code class="inline">index_provider</code></td><td>指数の提供会社（MSCI/東証/日経/野村など）</td><td>—</td></tr>
+          <tr class="hl"><td><b><code class="inline">is_msci</code></b></td><td><b>MSCIの指数を使っているか（はい/いいえ）</b></td><td><b>営業判断の中心。「いいえ」で純資産が大きい＝置換提案の狙い目</b></td></tr>
+          <tr><td><code class="inline">confidence</code></td><td>読み取りの確からしさ（high/medium/low）</td><td>low は要確認</td></tr>
+          <tr class="hl"><td><b><code class="inline">needs_review</code></b></td><td><b>人の目で確認したほうがよい行の印</b></td><td><b>「はい」の行は営業に使う前にチェック</b></td></tr>
+          <tr><td><code class="inline">prospectus_pdf_url</code></td><td>根拠にしたPDFのURL</td><td>確認したいときに開く</td></tr>
+          <tr><td><code class="inline">note</code></td><td>補足・不明の理由など</td><td>—</td></tr>
+        </tbody>
+      </table>
+      <div class="callout tip"><b>💡 使い方のコツ：</b><code class="inline">is_msci = いいえ</code> かつ <code class="inline">aum</code> が大きい行を上から見ていくと、「MSCIに乗り換えてもらう価値が高いファンド」が並びます。ただし <code class="inline">needs_review = はい</code> の行は、営業に使う前に必ず根拠PDFで確認してください。</div>
+    </section>
+
+    <!-- SECTION 7 -->
+    <section id="s7">
+      <h2 class="sec"><span class="n">7</span>うまくいかないとき</h2>
+
+      <h3 class="sub">「ベンチマークが不明」の行が多い</h3>
+      <p>いちばん多い症状です。原因は主に2つで、切り分け方は簡単です。まず、不明になったファンドの文字化ファイル（<code class="inline">data/text/{ファンドコード}.txt</code>）を開き、指数名（MSCI、TOPIX、日経 など）が文章の中にあるか探します。</p>
+      <table>
+        <thead><tr><th>確認結果</th><th>原因</th><th>対策</th></tr></thead>
+        <tbody>
+          <tr><td>指数名が文章の中に<b>ある</b>のに不明</td><td>読み取りルールの問題</td><td>改善版ドキュメント §2・§3（トリガー語の拡張と指数名の切り出し）</td></tr>
+          <tr><td>指数名が文章の中に<b>ない</b></td><td>文字化け・OCRの問題</td><td>改善版ドキュメント §5（OCRの強制）</td></tr>
+        </tbody>
+      </table>
+      <div class="callout"><b>最大の改善策：</b>インデックスファンドは「ベンチマーク」という言葉を使わず「<b>○○に連動する投資成果をめざします</b>」と書きます。読み取り条件を「連動」系まで広げるのが最も効果的です。</div>
+
+      <h3 class="sub">PDFがダウンロードできない／URLが違う</h3>
+      <p>野村のPDFのURLの作り方が変わった可能性があります。ファンド詳細ページを開き、「交付目論見書」リンクの本当のURLを確認して、Stage 2 の取得方法を合わせます。</p>
+
+      <h3 class="sub">サイトから一覧が取れない</h3>
+      <p>野村の検索ページはページを開いた後に中身が表示される仕組みです。ページの裏で動いているデータ取得の通信（API）を調べると安定します。仕様書 §4（最優先の調査タスク）を参照してください。</p>
+    </section>
+
+    <!-- SECTION 8 -->
+    <section id="s8">
+      <h2 class="sec"><span class="n">8</span>他の運用会社・ファンドに応用する</h2>
+      <p>このアプリは「野村専用」の部分と「どの運用会社でも使い回せる」部分に分かれています。応用のコツは、<b>使い回せる部分はそのまま、会社ごとに違う部分だけ作り替える</b>ことです。</p>
+      <div class="grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+        <div class="card">
+          <span class="pill pill-change">作り替えが必要</span>
+          <p style="margin-top:10px; margin-bottom:0;">会社ごとに違う部分</p>
+          <ul style="margin-bottom:0;">
+            <li>一覧の取り方（Stage 1）</li>
+            <li>PDFの場所の探し方（Stage 2）</li>
+          </ul>
+        </div>
+        <div class="card">
+          <span class="pill pill-keep">そのまま使える</span>
+          <p style="margin-top:10px; margin-bottom:0;">どの会社でも共通</p>
+          <ul style="margin-bottom:0;">
+            <li>PDFの文字化・OCR（Stage 4）</li>
+            <li>指数の読み取りロジック（Stage 5）</li>
+            <li>表の出力（Stage 6）</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout tip"><b>💡 要点：</b>大和アセットや三菱UFJアセットに広げる場合も、<b>指数を読み取る心臓部（Stage 4〜6）はほぼ流用でき、サイトからの取得（Stage 1〜2）だけ作り直せばよい</b>のが基本です。</div>
+
+      <!-- 8a Claude -->
+      <div id="s8a"></div>
+      <h3 class="sub">8-1. Claude（このチャット）への指示の出し方</h3>
+      <p>Claude には「設計・調査・改善」を頼むのが得意分野です。以下をコピーして、会社名などを書き換えて使ってください。</p>
+
+      <div class="tmpl">
+        <div class="tmpl-head">📋 テンプレA：別の運用会社版の仕様書を作ってもらう</div>
+        <pre>野村アセットマネジメント向けに作ったファンド・ベンチマーク抽出アプリを、
+「大和アセットマネジメント」向けに応用したいです。
+
+・添付の仕様書(nomura_benchmark_scraper_spec.md)と
+ 改善版ロジック(benchmark_extraction_improvement.md)をベースにしてください。
+・指数の読み取り部分(Stage 4〜6)は流用できる前提で、
+ サイトからの一覧取得(Stage 1)とPDF URL取得(Stage 2)を
+ 大和アセット向けに作り替えるための指示書を作ってください。
+・大和アセットのファンド検索ページのURLはこちらです：&lt;URLを貼る&gt;
+・出力の形式(列)は野村版と揃えてください。</pre>
+      </div>
+
+      <div class="tmpl">
+        <div class="tmpl-head">📋 テンプレB：不明が多い問題を直してもらう</div>
+        <pre>ベンチマークが「不明」になるファンドが多いです。改善してください。
+・不明になった代表20件のファンド名と、文字化したテキスト(data/text/*.txt)を貼ります：
+ &lt;ここに貼る&gt;
+・どの読み取りルールを追加・修正すればよいか、正規表現とLLMプロンプトの
+ 具体案を出してください。</pre>
+      </div>
+
+      <div class="tmpl">
+        <div class="tmpl-head">📋 テンプレC：出力結果を営業向けに整理してもらう</div>
+        <pre>出力されたnomura_benchmarks.csvを貼ります。
+・is_msciが「いいえ」かつ純資産が大きいファンドを上位20件、
+ 「MSCI置換提案の優先リスト」として表にまとめてください。
+・各ファンドについて、現在使っている指数と、
+ 提案できるMSCI指数の候補も添えてください。</pre>
+      </div>
+      <div class="callout tip"><b>💡 コツ：</b>Claude に頼むときは、関連ファイルを添付し、「何を流用し、何を作り替えるか」を明示すると精度が上がります。</div>
+
+      <!-- 8b Cursor -->
+      <div id="s8b"></div>
+      <h3 class="sub">8-2. Cursor への指示の出し方</h3>
+      <p>Cursor には「実際のコードを書く・直す」ことを頼みます。仕様書と改善版ドキュメントをプロジェクトに置いた状態で、以下のように指示します。</p>
+
+      <div class="tmpl">
+        <div class="tmpl-head">💻 テンプレD：新しい運用会社に対応させる</div>
+        <pre>このリポジトリは野村アセット向けのファンド・ベンチマーク抽出アプリです。
+仕様は nomura_benchmark_scraper_spec.md、抽出改善は
+benchmark_extraction_improvement.md にあります。
+
+これを「大和アセットマネジメント」に対応させてください。
+1. Stage 4〜6（テキスト抽出・ベンチマーク抽出・出力）は原則そのまま流用。
+2. Stage 1（一覧取得）を大和アセットのファンド検索ページ用に作り直す。
+   ・まずブラウザのDevToolsでデータ取得APIがないか調べ、あればそれを使う。
+   ・対象URL: &lt;URLを貼る&gt;
+   ・純資産の降順で上位100本を funds.json に出す。
+3. Stage 2（交付目論見書PDFのURL取得）を大和向けに作り直す。
+   ・詳細ページのHTMLから「交付目論見書」リンクを厳密に判定して取得。
+4. 会社ごとの違いは設定ファイル(config)に切り出し、
+   1つのコードベースで会社を切り替えられる構造にリファクタしてください。
+出力の列は野村版と同じスキーマを維持すること。</pre>
+      </div>
+
+      <div class="tmpl">
+        <div class="tmpl-head">💻 テンプレE：抽出の不明を減らす改修</div>
+        <pre>benchmark_extraction_improvement.md の方針に沿って、Stage 5 を改修してください。
+特に：
+・トリガー語を「連動する投資成果をめざす」「対象インデックス」等まで拡張（§2）
+・指数名の括弧修飾（配当込み等）を落とさない切り出し（§3）
+・ファンド名からのフォールバック抽出を追加（§4）
+・インデックス型で本文から取れない場合はOCRを強制（§5）
+改修後、§9のテストケースが「不明」にならないことを確認してください。</pre>
+      </div>
+
+      <div class="tmpl">
+        <div class="tmpl-head">💻 テンプレF：まず小さく試す</div>
+        <pre>いきなり100本ではなく、まず上位5本だけで通しで動かせるようにしてください。
+各Stageの結果（funds.json、PDF、text、抽出結果）を確認できるログを出し、
+5本が正しく取れることを確認してから本数を増やせる作りにしてください。</pre>
+      </div>
+      <div class="callout tip"><b>💡 コツ：</b>Cursor には一度に全部ではなく、Stageごと・少数本から頼むと失敗が減ります。仕様書と改善版をリポジトリに入れて「これに従って」と指示するのが最も確実です。</div>
+    </section>
+
+    <!-- SECTION 9 -->
+    <section id="s9">
+      <h2 class="sec"><span class="n">9</span>用語集</h2>
+      <table>
+        <tbody>
+          <tr><td><b>AUM（純資産総額）</b></td><td>そのファンドに集まっているお金の総額。大きいほど影響力・重要度が高い。</td></tr>
+          <tr><td><b>ベンチマーク／指数</b></td><td>ファンドが目標や基準にする「ものさし」。例：TOPIX、日経225、MSCIコクサイ。</td></tr>
+          <tr><td><b>インデックス型（パッシブ）</b></td><td>指数と同じ値動きをめざすファンド。「○○に連動」と書かれる。</td></tr>
+          <tr><td><b>アクティブ型</b></td><td>指数を上回ることをめざすファンド。「○○をベンチマークとする」等。</td></tr>
+          <tr><td><b>交付目論見書</b></td><td>投資信託の公式な説明書（PDF）。ベンチマークはここに書かれている。</td></tr>
+          <tr><td><b>OCR</b></td><td>画像になっている文字を読み取って文章に変換する技術。</td></tr>
+          <tr><td><b>API</b></td><td>プログラム同士がデータをやり取りする窓口。サイトの裏側でデータを返していることがある。</td></tr>
+          <tr><td><b>指数プロバイダー</b></td><td>指数を作って提供している会社。MSCI、東証（JPX）、日経、野村など。</td></tr>
+          <tr><td><b>confidence（確からしさ）</b></td><td>自動読み取りの信頼度。low は人の確認推奨。</td></tr>
+          <tr><td><b>needs_review</b></td><td>人の目で確認したほうがよい、という印。</td></tr>
+        </tbody>
+      </table>
+
+      <div class="card" style="margin-top:20px;">
+        <b style="color:#003366;">🆘 困ったときは</b>
+        <ul style="margin-top:8px; margin-bottom:0;">
+          <li>設計や調査、結果の整理 → <b>Claude</b>（このチャット）に、関連ファイルを添付して相談</li>
+          <li>実際のコードの作成・修正 → <b>Cursor</b> に、仕様書と改善版を渡して依頼</li>
+          <li>不明が多いなど品質の問題 → まず <code class="inline">data/text/</code> を確認し、改善版ドキュメント §10（デバッグの勘所）へ</li>
+        </ul>
+      </div>
+    </section>
+
+    <footer>
+      MSCI Japan — Sales Intelligence Initiative｜ファンド・ベンチマーク抽出アプリ 使い方説明書｜2026年7月
+    </footer>
+  </main>
+</div>
+
+<script>
+  // Smooth scroll for TOC links
+  document.querySelectorAll('nav.toc a').forEach(function(a){
+    a.addEventListener('click', function(e){
+      var id = a.getAttribute('href');
+      if (id && id.startsWith('#')) {
+        var el = document.querySelector(id);
+        if (el) { e.preventDefault(); el.scrollIntoView({behavior:'smooth'}); }
+      }
+    });
+  });
+</script>
+</body>
+</html>

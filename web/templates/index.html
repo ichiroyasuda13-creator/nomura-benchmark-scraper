@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>野村ベンチマーク抽出ツール</title>
+    <meta name="description" content="野村アセットマネジメントの公募ファンドからベンチマーク指数を自動抽出するWebアプリケーション">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+    <div class="app-container">
+
+        <!-- ── Header ─────────────────────────────────────── -->
+        <header class="app-header fade-in">
+            <h1>📊 野村ベンチマーク抽出ツール</h1>
+            <p class="subtitle">Nomura Fund Benchmark Extractor — 交付目論見書PDFからベンチマーク指数を自動抽出</p>
+        </header>
+
+        <!-- ── Controls ────────────────────────────────────── -->
+        <section class="card fade-in" id="controlCard">
+            <div class="card-title"><span class="icon">⚙️</span> 実行設定</div>
+            <div class="controls-grid">
+                <div class="control-group">
+                    <label>取得ファンド数</label>
+                    <div class="range-value" id="fundCountDisplay">100</div>
+                    <input type="range" id="maxFunds" min="5" max="200" step="5" value="100">
+                    <div class="range-display"><span>5</span><span>200</span></div>
+                </div>
+                <div class="control-group">
+                    <div class="toggle-row">
+                        <label class="toggle">
+                            <input type="checkbox" id="useLLM" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-label">LLM抽出 (Claude Sonnet 5)</span>
+                    </div>
+                    <div class="toggle-row">
+                        <label class="toggle">
+                            <input type="checkbox" id="forceRerun">
+                            <span class="toggle-slider"></span>
+                        </label>
+                        <span class="toggle-label">キャッシュ無視で再実行</span>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <div class="btn-actions">
+                        <button class="btn btn-primary" id="btnStart" onclick="startPipeline()">
+                            🚀 実行開始
+                        </button>
+                        <button class="btn btn-danger" id="btnCancel" onclick="cancelPipeline()" style="display:none">
+                            ✖ キャンセル
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Stage Progress ──────────────────────────────── -->
+        <section class="card fade-in" id="progressCard" style="display:none">
+            <div class="card-title"><span class="icon">📡</span> パイプライン進捗</div>
+            <div class="stage-progress" id="stageProgress">
+                <div class="stage-step" data-stage="1">
+                    <div class="stage-dot">1</div>
+                    <span class="stage-label">一覧取得</span>
+                </div>
+                <div class="stage-connector" data-after="1"></div>
+                <div class="stage-step" data-stage="2">
+                    <div class="stage-dot">2</div>
+                    <span class="stage-label">PDF URL</span>
+                </div>
+                <div class="stage-connector" data-after="2"></div>
+                <div class="stage-step" data-stage="3">
+                    <div class="stage-dot">3</div>
+                    <span class="stage-label">DL</span>
+                </div>
+                <div class="stage-connector" data-after="3"></div>
+                <div class="stage-step" data-stage="4">
+                    <div class="stage-dot">4</div>
+                    <span class="stage-label">テキスト</span>
+                </div>
+                <div class="stage-connector" data-after="4"></div>
+                <div class="stage-step" data-stage="5">
+                    <div class="stage-dot">5</div>
+                    <span class="stage-label">BM抽出</span>
+                </div>
+                <div class="stage-connector" data-after="5"></div>
+                <div class="stage-step" data-stage="6">
+                    <div class="stage-dot">6</div>
+                    <span class="stage-label">出力</span>
+                </div>
+            </div>
+
+            <!-- Log Console -->
+            <div class="card-title" style="margin-top: var(--space-md)"><span class="icon">🖥️</span> ログ</div>
+            <div class="log-console" id="logConsole">
+                <div class="log-line">パイプライン開始待ち...</div>
+            </div>
+        </section>
+
+        <!-- ── Results ─────────────────────────────────────── -->
+        <section class="card fade-in" id="resultsCard" style="display:none">
+            <div class="card-title"><span class="icon">📋</span> 抽出結果</div>
+
+            <!-- Stats -->
+            <div class="stats-row" id="statsRow">
+                <div class="stat-item">
+                    <div class="stat-value accent" id="statTotal">0</div>
+                    <div class="stat-label">ファンド総数</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value success" id="statExtracted">0</div>
+                    <div class="stat-label">BM抽出成功</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value warning" id="statReview">0</div>
+                    <div class="stat-label">要確認</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="statMSCI">0</div>
+                    <div class="stat-label">MSCI関連</div>
+                </div>
+            </div>
+
+            <!-- Downloads -->
+            <div class="btn-actions" style="margin-bottom: var(--space-md)">
+                <a class="btn btn-download" href="/api/download/csv" download>📄 CSVダウンロード</a>
+                <a class="btn btn-download" href="/api/download/xlsx" download>📊 Excelダウンロード</a>
+            </div>
+
+            <!-- Search -->
+            <div class="search-bar">
+                <input type="text" class="search-input" id="searchInput" placeholder="🔍 ファンド名・ベンチマークで検索..."
+                    oninput="filterTable()">
+            </div>
+
+            <!-- Table -->
+            <div class="table-wrapper">
+                <table class="results-table" id="resultsTable">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable(0)">順位</th>
+                            <th onclick="sortTable(1)">ファンド名</th>
+                            <th onclick="sortTable(2)">ファンドコード</th>
+                            <th onclick="sortTable(3)">AUM (億円)</th>
+                            <th onclick="sortTable(4)">ファンド種別</th>
+                            <th onclick="sortTable(5)">ベンチマーク</th>
+                            <th onclick="sortTable(6)">指数提供者</th>
+                            <th onclick="sortTable(7)">信頼度</th>
+                            <th onclick="sortTable(8)">抽出方法</th>
+                            <th onclick="sortTable(9)">要確認</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultsBody"></tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- ── Empty State ─────────────────────────────────── -->
+        <section class="card fade-in" id="emptyState">
+            <div class="empty-state">
+                <div class="icon">📂</div>
+                <p>「実行開始」をクリックしてベンチマーク抽出を開始してください</p>
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        // ── State ──────────────────────────────────
+        let eventSource = null;
+        let allResults = [];
+        let sortCol = -1;
+        let sortAsc = true;
+
+        // ── Range slider ──────────────────────────
+        const slider = document.getElementById('maxFunds');
+        const display = document.getElementById('fundCountDisplay');
+        slider.addEventListener('input', () => { display.textContent = slider.value; });
+
+        // ── Start Pipeline ────────────────────────
+        async function startPipeline() {
+            const maxFunds = parseInt(slider.value);
+            const useLLM = document.getElementById('useLLM').checked;
+            const force = document.getElementById('forceRerun').checked;
+
+            document.getElementById('btnStart').disabled = true;
+            document.getElementById('btnStart').innerHTML = '<span class="spinner"></span> 実行中...';
+            document.getElementById('btnCancel').style.display = 'inline-flex';
+            document.getElementById('progressCard').style.display = 'block';
+            document.getElementById('emptyState').style.display = 'none';
+            document.getElementById('logConsole').innerHTML = '';
+
+            // Reset stages
+            document.querySelectorAll('.stage-step').forEach(el => {
+                el.classList.remove('active', 'done');
+            });
+            document.querySelectorAll('.stage-connector').forEach(el => {
+                el.classList.remove('done');
+            });
+
+            try {
+                const resp = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ max_funds: maxFunds, use_llm: useLLM, force }),
+                });
+                if (!resp.ok) {
+                    const err = await resp.json();
+                    addLog('ERROR', err.error || 'Failed to start');
+                    resetButtons();
+                    return;
+                }
+            } catch (e) {
+                addLog('ERROR', 'Connection error: ' + e.message);
+                resetButtons();
+                return;
+            }
+
+            // Connect SSE
+            connectSSE();
+        }
+
+        // ── SSE Connection ────────────────────────
+        function connectSSE() {
+            if (eventSource) eventSource.close();
+            eventSource = new EventSource('/api/status');
+
+            eventSource.addEventListener('log', (e) => {
+                const data = JSON.parse(e.data);
+                addLog(data.level, data.message);
+            });
+
+            eventSource.addEventListener('stage', (e) => {
+                const data = JSON.parse(e.data);
+                updateStage(data.stage);
+            });
+
+            eventSource.addEventListener('complete', (e) => {
+                const data = JSON.parse(e.data);
+                addLog('SUCCESS', `✅ 完了: ${data.total}件処理 (要確認: ${data.needs_review}件)`);
+                fetchResults();
+            });
+
+            eventSource.addEventListener('done', () => {
+                resetButtons();
+                if (eventSource) { eventSource.close(); eventSource = null; }
+            });
+
+            eventSource.addEventListener('error', (e) => {
+                if (e.data) {
+                    const data = JSON.parse(e.data);
+                    addLog('ERROR', '❌ エラー: ' + data.message);
+                }
+            });
+
+            eventSource.addEventListener('cancelled', () => {
+                addLog('WARNING', '⏹ キャンセルされました');
+                resetButtons();
+            });
+
+            eventSource.onerror = () => {
+                // Reconnect silently on stream errors
+            };
+        }
+
+        // ── Update stage progress ─────────────────
+        function updateStage(stageNum) {
+            document.querySelectorAll('.stage-step').forEach(el => {
+                const s = parseInt(el.dataset.stage);
+                el.classList.remove('active', 'done');
+                if (s < stageNum) el.classList.add('done');
+                if (s === stageNum) el.classList.add('active');
+            });
+            document.querySelectorAll('.stage-connector').forEach(el => {
+                const after = parseInt(el.dataset.after);
+                el.classList.toggle('done', after < stageNum);
+            });
+        }
+
+        // ── Add log line ──────────────────────────
+        function addLog(level, message) {
+            const console = document.getElementById('logConsole');
+            const line = document.createElement('div');
+            line.className = 'log-line ' + level;
+            line.textContent = message;
+            console.appendChild(line);
+            console.scrollTop = console.scrollHeight;
+
+            // Keep last 300 lines
+            while (console.children.length > 300) {
+                console.removeChild(console.firstChild);
+            }
+        }
+
+        // ── Cancel Pipeline ───────────────────────
+        async function cancelPipeline() {
+            await fetch('/api/cancel', { method: 'POST' });
+        }
+
+        // ── Reset buttons ─────────────────────────
+        function resetButtons() {
+            const btn = document.getElementById('btnStart');
+            btn.disabled = false;
+            btn.innerHTML = '🚀 実行開始';
+            document.getElementById('btnCancel').style.display = 'none';
+
+            // Mark all active stages as done
+            document.querySelectorAll('.stage-step.active').forEach(el => {
+                el.classList.remove('active');
+                el.classList.add('done');
+            });
+        }
+
+        // ── Fetch and display results ─────────────
+        async function fetchResults() {
+            try {
+                const resp = await fetch('/api/results');
+                const data = await resp.json();
+                allResults = data.results || [];
+                renderResults(allResults);
+                document.getElementById('resultsCard').style.display = 'block';
+            } catch (e) {
+                addLog('ERROR', 'Failed to fetch results');
+            }
+        }
+
+        // ── Render results table ──────────────────
+        function renderResults(results) {
+            // Stats
+            document.getElementById('statTotal').textContent = results.length;
+            document.getElementById('statExtracted').textContent =
+                results.filter(r => r.benchmark && r.benchmark !== 'なし').length;
+            document.getElementById('statReview').textContent =
+                results.filter(r => r.needs_review).length;
+            document.getElementById('statMSCI').textContent =
+                results.filter(r => r.is_msci).length;
+
+            // Table
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = '';
+
+            results.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+          <td>${r.rank}</td>
+          <td style="max-width:260px">${escapeHtml(r.fund_name)}</td>
+          <td><code>${r.fund_code}</code></td>
+          <td style="text-align:right">${formatAum(r.aum)}</td>
+          <td>${fundTypeBadge(r.fund_type)}</td>
+          <td style="max-width:280px">${escapeHtml(r.benchmark || '—')}</td>
+          <td>${escapeHtml(r.index_provider)}</td>
+          <td>${confidenceBadge(r.confidence)}</td>
+          <td><span class="badge badge-info">${r.extraction_method}</span></td>
+          <td>${r.needs_review
+                        ? '<span class="badge badge-warning">要確認</span>'
+                        : '<span class="badge badge-success">OK</span>'
+                    }</td>
+        `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // ── Helpers ────────────────────────────────
+        function escapeHtml(text) {
+            if (!text) return '';
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        function formatAum(aum) {
+            if (!aum) return '—';
+            return (aum / 1e8).toLocaleString('ja-JP', { maximumFractionDigits: 0 });
+        }
+
+        function confidenceBadge(conf) {
+            const map = {
+                high: ['badge-success', 'HIGH'],
+                medium: ['badge-warning', 'MED'],
+                low: ['badge-error', 'LOW'],
+            };
+            const [cls, label] = map[conf] || ['badge-info', conf];
+            return `<span class="badge ${cls}">${label}</span>`;
+        }
+
+        function fundTypeBadge(type) {
+            if (!type) return '—';
+            const colors = {
+                'インデックス': 'badge-info',
+                'アクティブ': 'badge-success',
+                'アクティブ（BMなし）': 'badge-warning',
+                'バランス（複合BM）': 'badge-info',
+                '不明': 'badge-error',
+            };
+            return `<span class="badge ${colors[type] || 'badge-info'}">${escapeHtml(type)}</span>`;
+        }
+
+        // ── Filter / Sort ─────────────────────────
+        function filterTable() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allResults.filter(r =>
+                (r.fund_name || '').toLowerCase().includes(query) ||
+                (r.benchmark || '').toLowerCase().includes(query) ||
+                (r.fund_code || '').toLowerCase().includes(query)
+            );
+            renderResults(filtered);
+        }
+
+        function sortTable(colIndex) {
+            if (sortCol === colIndex) {
+                sortAsc = !sortAsc;
+            } else {
+                sortCol = colIndex;
+                sortAsc = true;
+            }
+
+            const keys = ['rank', 'fund_name', 'fund_code', 'aum', 'fund_type',
+                'benchmark', 'index_provider', 'confidence', 'extraction_method', 'needs_review'];
+            const key = keys[colIndex];
+
+            allResults.sort((a, b) => {
+                let va = a[key], vb = b[key];
+                if (va == null) va = '';
+                if (vb == null) vb = '';
+                if (typeof va === 'number' && typeof vb === 'number') {
+                    return sortAsc ? va - vb : vb - va;
+                }
+                return sortAsc
+                    ? String(va).localeCompare(String(vb), 'ja')
+                    : String(vb).localeCompare(String(va), 'ja');
+            });
+
+            renderResults(allResults);
+        }
+
+        // ── Check for existing results on load ────
+        (async function init() {
+            try {
+                const resp = await fetch('/api/results');
+                const data = await resp.json();
+                if (data.results && data.results.length > 0) {
+                    allResults = data.results;
+                    renderResults(allResults);
+                    document.getElementById('resultsCard').style.display = 'block';
+                    document.getElementById('emptyState').style.display = 'none';
+                    // Show all stages as done
+                    document.getElementById('progressCard').style.display = 'block';
+                    document.querySelectorAll('.stage-step').forEach(el => el.classList.add('done'));
+                    document.querySelectorAll('.stage-connector').forEach(el => el.classList.add('done'));
+                }
+            } catch (e) { /* ignore */ }
+        })();
+    </script>
+</body>
+
+</html>
