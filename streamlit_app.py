@@ -504,23 +504,19 @@ def load_records_for_companies(company_ids: list[str]) -> list[BenchmarkRecord]:
 # ── Main Application ───────────────────────────────────────────────────────
 def main() -> None:
     # ── Header ─────────────────────────────────────────────────────────────
-    st.markdown("""
-    <div class="openbb-header">
-        <div class="openbb-logo-brand">
-            <div class="openbb-icon-glyph">⚡</div>
-            <div>
-                <h1 class="openbb-title-h1">
-                    AM FLOW ANALYSIS
-                </h1>
-            </div>
-        </div>
-        <div class="openbb-header-meta">
+    st.markdown("""<div class="openbb-header">
+<div class="openbb-logo-brand">
+<div class="openbb-icon-glyph">⚡</div>
+<div>
+<h1 class="openbb-title-h1">AM FLOW ANALYSIS</h1>
+</div>
+</div>
+<div class="openbb-header-meta">
+CORE: <span style="color: #00F5D4;">v3.4-PRO</span> ｜ ROUTE: <span style="color: #818cf8;">/am-flow/intelligence</span><br/>
+STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
+</div>
+</div>""", unsafe_allow_html=True)
 
-            CORE: <span style="color: #00F5D4;">v3.4-PRO</span> ｜ ROUTE: <span style="color: #818cf8;">/am-flow/intelligence</span><br/>
-            STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
 
 
 
