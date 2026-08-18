@@ -220,6 +220,29 @@ def run_pipeline_for_company(
     if log_func:
         log_func(f"🚀 {company_name} のパイプライン開始 (AUM上位 {max_funds}本)")
 
+    # If not force and pre-extracted benchmark data exists, load and refresh instantaneously
+    comp_json = DATA_DIR / f"{company_id}_benchmarks.json"
+    if not force and comp_json.exists():
+        raw = load_json(comp_json, [])
+        if len(raw) >= min(max_funds, 20):
+            recs = [BenchmarkRecord.model_validate(item) for item in raw[:max_funds]]
+            for r in recs:
+                r.management_company = company_name
+                # Ensure theme & distributor fields are populated
+                if not r.theme_category:
+                    r.theme_category = classify_fund_theme(r.fund_name, r.benchmark)
+                if not r.top_distributors:
+                    dist_s, prim_s, act_s = resolve_fund_distributors(r.fund_name, company_name, r.is_etf)
+                    r.top_distributors = dist_s
+                    r.primary_broker = prim_s
+                    r.sales_pitch_action = act_s
+            if log_func:
+                log_func(f"⚡ {company_name}: キャッシュから {len(recs)} 本を即時読み込み・最新指標同期完了")
+            return recs
+
+    # Live Pipeline Execution (safe max workers 3 to prevent Cloud OOM)
+    safe_workers = min(workers, 4)
+
     # Stage 1
     if company_id == "daiwa":
         funds = run_stage1_daiwa(force=force, max_funds=max_funds)
@@ -232,17 +255,17 @@ def run_pipeline_for_company(
 
     # Stage 2
     if company_id not in ("daiwa", "muam"):
-        run_stage2(force=force, max_workers=workers)
+        run_stage2(force=force, max_workers=safe_workers)
     if log_func:
         log_func("Stage 2 完了: 交付目論見書URL解決")
 
     # Stage 3
-    run_stage3(force=force, max_workers=workers)
+    run_stage3(force=force, max_workers=safe_workers)
     if log_func:
         log_func("Stage 3 完了: PDFダウンロード完了")
 
     # Stage 4
-    run_stage4(force=force, allow_ocr=True, max_workers=workers)
+    run_stage4(force=force, allow_ocr=False, max_workers=safe_workers)
     if log_func:
         log_func("Stage 4 完了: テキスト抽出完了")
 
@@ -256,19 +279,19 @@ def run_pipeline_for_company(
     records = run_stage5(
         use_llm=use_llm,
         provider=provider,
-        max_workers=workers,
+        max_workers=safe_workers,
         progress_callback=_stage5_cb,
     )
     for r in records:
         r.management_company = company_name
 
     # Save company-specific copy
-    comp_json = DATA_DIR / f"{company_id}_benchmarks.json"
     save_json(comp_json, [r.model_dump(mode="json") for r in records])
     if log_func:
         log_func(f"✅ {company_name} 完了: {len(records)} 本の分析完了")
 
     return records
+
 
 
 # ── Load existing data ─────────────────────────────────────────────────────

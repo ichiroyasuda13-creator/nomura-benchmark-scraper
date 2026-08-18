@@ -39,26 +39,36 @@ def _extract_with_pymupdf(pdf_path: Path) -> tuple[str, int]:
 def _extract_with_ocr(
     pdf_path: Path,
     *,
-    max_pages: int = 8,
-    dpi: int = 300,
+    max_pages: int = 3,
+    dpi: int = 150,
 ) -> str:
     try:
         import pytesseract
         from pdf2image import convert_from_path
     except ImportError as exc:
-        raise RuntimeError(
-            "OCR dependencies missing. Install pdf2image and pytesseract, "
-            "and ensure Tesseract with Japanese language data is available."
-        ) from exc
+        logger.warning("OCR dependencies missing: {}", exc)
+        return ""
 
-    images = convert_from_path(str(pdf_path), dpi=dpi)
+    try:
+        images = convert_from_path(
+            str(pdf_path),
+            first_page=1,
+            last_page=max_pages,
+            dpi=dpi,
+        )
+    except Exception as exc:
+        logger.warning("Failed to render PDF for OCR: {}", exc)
+        return ""
+
     chunks: list[str] = []
-    for index, image in enumerate(images, start=1):
-        text = pytesseract.image_to_string(image, lang="jpn")
-        chunks.append(text)
-        if index >= max_pages:
-            break
+    for image in images:
+        try:
+            text = pytesseract.image_to_string(image, lang="jpn")
+            chunks.append(text)
+        except Exception as ocr_err:
+            logger.warning("Tesseract OCR failed: {}", ocr_err)
     return "\n".join(chunks)
+
 
 
 def extract_ocr_pages(
