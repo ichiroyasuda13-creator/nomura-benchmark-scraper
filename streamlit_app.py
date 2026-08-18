@@ -236,10 +236,23 @@ def run_pipeline(
 
     # Stage 5
     prov_label = provider or "Auto"
-    prog_bar.progress(5 / 7, text=f"Stage 5/6: ベンチマーク・純流入・販社抽出中 (LLM: {prov_label})...")
-    status_text.info(f"Stage 5: ベンチマーク指数・推定純流入・主要販社を分析中 (LLM Provider: {prov_label})...")
-    records = run_stage5(use_llm=use_llm, provider=provider)
+    prog_bar.progress(5 / 7, text=f"Stage 5/6: ベンチマーク・純流入・販社並行抽出中 (LLM: {prov_label}, 並行数: {workers})...")
+    status_text.info(f"Stage 5: ベンチマーク指数・推定純流入・主要販社を並行分析中 (並行数: {workers})...")
+
+    def _stage5_progress(done: int, total_cnt: int, item_name: str) -> None:
+        pct = 5 / 7 + (done / total_cnt) * (1 / 7)
+        prog_bar.progress(min(pct, 0.95), text=f"Stage 5/6: {done}/{total_cnt} 本抽出完了 ({item_name})")
+        if done % 5 == 0 or done == total_cnt:
+            log(f"Stage 5 進捗: {done}/{total_cnt} 本 ({item_name})")
+
+    records = run_stage5(
+        use_llm=use_llm,
+        provider=provider,
+        max_workers=workers,
+        progress_callback=_stage5_progress,
+    )
     log(f"Stage 5 完了: {len(records)} 本のベンチマーク・フロー分析完了")
+
 
     # Save company-specific copy
     comp_json = DATA_DIR / f"{company_id}_benchmarks.json"

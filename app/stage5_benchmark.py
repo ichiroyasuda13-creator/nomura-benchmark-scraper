@@ -439,18 +439,45 @@ def extract_benchmark_for_fund(
 
 
 
-def run_stage5(*, use_llm: bool = True, provider: str | None = None, model: str | None = None) -> list[BenchmarkRecord]:
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Callable
+
+
+def run_stage5(
+    *,
+    use_llm: bool = True,
+    provider: str | None = None,
+    model: str | None = None,
+    max_workers: int = 5,
+    progress_callback: Callable[[int, int, str], None] | None = None,
+) -> list[BenchmarkRecord]:
     raw = load_json(FUNDS_JSON, [])
     if not raw:
         raise RuntimeError("Stage5 requires funds.json. Run stage1 first.")
     funds = [Fund.model_validate(item) for item in raw]
-    records = [
-        extract_benchmark_for_fund(fund, use_llm=use_llm, provider=provider, model=model)
-        for fund in funds
-    ]
+    total = len(funds)
+    results_map: dict[str, BenchmarkRecord] = {}
+
+    def _worker(fund: Fund) -> tuple[str, BenchmarkRecord]:
+        rec = extract_benchmark_for_fund(fund, use_llm=use_llm, provider=provider, model=model)
+        return fund.fund_code, rec
+
+    completed = 0
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_worker, f): f for f in funds}
+        for future in as_completed(futures):
+            code, rec = future.result()
+            results_map[code] = rec
+            completed += 1
+            if progress_callback:
+                progress_callback(completed, total, f"{rec.fund_name[:22]}... -> {rec.benchmark or 'なし'}")
+
+    # Maintain original AUM rank order
+    records = [results_map[f.fund_code] for f in funds if f.fund_code in results_map]
     save_json(BENCHMARKS_JSON, [record.model_dump(mode="json") for record in records])
-    logger.info("Stage5: extracted benchmarks for {} funds", len(records))
+    logger.info("Stage5: extracted benchmarks for {} funds in parallel", len(records))
     return records
+
 
 
 def reextract_single_fund(

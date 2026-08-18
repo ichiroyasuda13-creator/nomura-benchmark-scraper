@@ -129,7 +129,7 @@ def _extract_json(text: str) -> dict[str, Any]:
 def _call_anthropic(prompt: str, model: str) -> str:
     try:
         import anthropic
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, timeout=15.0)
         message = client.messages.create(
             model=model,
             max_tokens=1200,
@@ -153,7 +153,7 @@ def _call_anthropic(prompt: str, model: str) -> str:
             "system": SYSTEM_PROMPT,
             "messages": [{"role": "user", "content": prompt}],
         }
-        with httpx.Client(timeout=60.0) as client:
+        with httpx.Client(timeout=15.0) as client:
             resp = client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
@@ -175,7 +175,7 @@ def _call_openai(prompt: str, model: str) -> str:
         "temperature": 0,
         "response_format": {"type": "json_object"},
     }
-    with httpx.Client(timeout=60.0) as client:
+    with httpx.Client(timeout=15.0) as client:
         resp = client.post(url, headers=headers, json=payload)
         resp.raise_for_status()
         data = resp.json()
@@ -196,7 +196,7 @@ def _call_gemini(prompt: str, model: str) -> str:
             "responseMimeType": "application/json",
         },
     }
-    with httpx.Client(timeout=60.0) as client:
+    with httpx.Client(timeout=15.0) as client:
         resp = client.post(url, headers=headers, json=payload)
         resp.raise_for_status()
         data = resp.json()
@@ -204,6 +204,7 @@ def _call_gemini(prompt: str, model: str) -> str:
         if not candidates:
             raise RuntimeError(f"Gemini API returned no candidates: {data}")
         return candidates[0]["content"]["parts"][0]["text"]
+
 
 
 def _call_ollama(prompt: str, model: str) -> str:
