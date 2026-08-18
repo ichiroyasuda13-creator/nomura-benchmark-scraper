@@ -25,35 +25,41 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.config import (
-    ANTHROPIC_API_KEY,
-    BENCHMARKS_JSON,
-    DATA_DIR,
-    FUNDS_JSON,
-    GEMINI_API_KEY,
-    MAX_WORKERS,
-    OPENAI_API_KEY,
-    OUTPUT_DIR,
-    TEXT_DIR,
-    ensure_dirs,
-)
-from app.daiwa_stage1 import run_stage1_daiwa
-from app.distributors import build_broker_theme_sales_matrix, resolve_fund_distributors
-from app.flow_calculator import estimate_fund_flow_from_returns
-from app.http_client import load_json, save_json, setup_logging
-from app.llm import get_available_providers, llm_available
-from app.models import (
-    BenchmarkRecord,
-    Confidence,
-    Fund,
-    FundType,
-    format_aum_oku,
-    format_inflow_oku,
-)
-from app.muam_stage1 import run_stage1_muam
-from app.proposal_generator import generate_product_proposals
-from app.stage5_benchmark import reextract_single_fund, update_manual_override
-from app.theme_classifier import THEMES, classify_fund_theme
+try:
+    from app.config import (
+        ANTHROPIC_API_KEY,
+        BENCHMARKS_JSON,
+        DATA_DIR,
+        FUNDS_JSON,
+        GEMINI_API_KEY,
+        MAX_WORKERS,
+        OPENAI_API_KEY,
+        OUTPUT_DIR,
+        TEXT_DIR,
+        ensure_dirs,
+    )
+    from app.daiwa_stage1 import run_stage1_daiwa
+    from app.distributors import build_broker_theme_sales_matrix, resolve_fund_distributors
+    from app.flow_calculator import estimate_fund_flow_from_returns
+    from app.http_client import load_json, save_json, setup_logging
+    from app.llm import get_available_providers, llm_available
+    from app.models import (
+        BenchmarkRecord,
+        Confidence,
+        Fund,
+        FundType,
+        format_aum_oku,
+        format_inflow_oku,
+    )
+    from app.muam_stage1 import run_stage1_muam
+    from app.proposal_generator import generate_product_proposals
+    from app.stage5_benchmark import reextract_single_fund, update_manual_override
+    from app.theme_classifier import THEMES, classify_fund_theme
+except Exception as _import_err:
+    st.error(f"⚠️ 初期化インポートエラー: {_import_err}")
+    st.exception(_import_err)
+    st.stop()
+
 
 # ── Page Config ────────────────────────────────────────────────────────────
 st.set_page_config(

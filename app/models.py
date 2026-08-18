@@ -6,7 +6,16 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, field_validator
+try:
+    from pydantic import BaseModel, Field, field_validator
+    _PYDANTIC_V2 = True
+except ImportError:
+    from pydantic import BaseModel, Field, validator
+    _PYDANTIC_V2 = False
+
+    def field_validator(*fields: str, mode: str = "after", **kwargs: Any):
+        pre = (mode == "before")
+        return validator(*fields, pre=pre, allow_reuse=True, **kwargs)
 
 
 class Confidence(str, Enum):
@@ -32,7 +41,25 @@ class ExtractionMethod(str, Enum):
     NAME_FALLBACK = "name_fallback"
 
 
-class Fund(BaseModel):
+class CompatibleBaseModel(BaseModel):
+    """Base model with dual Pydantic v1/v2 compatibility."""
+
+    @classmethod
+    def model_validate(cls, obj: Any) -> Any:
+        if hasattr(cls, "parse_obj") and not _PYDANTIC_V2:
+            return cls.parse_obj(obj)
+        try:
+            return super().model_validate(obj)
+        except AttributeError:
+            return cls.parse_obj(obj)
+
+    def model_dump(self, mode: str = "python", **kwargs: Any) -> dict[str, Any]:
+        if hasattr(super(), "model_dump") and _PYDANTIC_V2:
+            return super().model_dump(mode=mode, **kwargs)
+        return self.dict(**kwargs)
+
+
+class Fund(CompatibleBaseModel):
     fund_name: str
     fund_code: str
     nam_code: str = ""
@@ -50,12 +77,12 @@ class Fund(BaseModel):
     @field_validator("detail_url")
     @classmethod
     def normalize_detail_url(cls, value: str) -> str:
-        if value.startswith("//"):
+        if isinstance(value, str) and value.startswith("//"):
             return "https:" + value
-        return value
+        return value or ""
 
 
-class BenchmarkExtraction(BaseModel):
+class BenchmarkExtraction(CompatibleBaseModel):
     fund_type: FundType = FundType.UNKNOWN
     benchmark: Optional[str] = None
     benchmark_detail: Optional[str | dict[str, Any]] = None
@@ -92,7 +119,7 @@ class BenchmarkExtraction(BaseModel):
         return str(value)
 
 
-class BenchmarkRecord(BaseModel):
+class BenchmarkRecord(CompatibleBaseModel):
     rank: int
     management_company: str = "野村アセットマネジメント"
     fund_name: str
@@ -222,5 +249,3 @@ def format_inflow_oku(flow: float) -> str:
         cho = oku / 10000
         return f"{sign}{cho:,.1f}兆円"
     return f"{sign}{oku:,.0f}億円"
-
-
