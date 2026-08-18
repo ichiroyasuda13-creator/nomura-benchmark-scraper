@@ -19,6 +19,9 @@ from app.models import (
     Fund,
     FundType,
 )
+from app.distributors import resolve_fund_distributors
+from app.flow_calculator import estimate_fund_flow_from_returns
+from app.theme_classifier import classify_fund_theme
 from app.providers import (
     BENCHMARK_CANDIDATE_PATTERNS,
     NEGATIVE_BENCHMARK_PATTERNS,
@@ -35,6 +38,7 @@ from app.providers import (
     parse_composite_components,
     prioritize_candidates,
 )
+
 
 
 def _strip_header(text: str) -> str:
@@ -255,7 +259,10 @@ def _should_force_ocr(
     return index_like
 
 
-def _finalize_extraction(extraction: BenchmarkExtraction) -> BenchmarkExtraction:
+def _finalize_extraction(
+    extraction: BenchmarkExtraction,
+    fund: Fund | None = None,
+) -> BenchmarkExtraction:
     if extraction.confidence == Confidence.LOW:
         extraction.needs_review = True
     if extraction.benchmark and (
@@ -269,7 +276,24 @@ def _finalize_extraction(extraction: BenchmarkExtraction) -> BenchmarkExtraction
         extraction.benchmark,
         extraction.index_provider,
     )
+
+    if fund:
+        extraction.theme_category = classify_fund_theme(fund.fund_name, extraction.benchmark or "")
+        top_dist, primary, action = resolve_fund_distributors(
+            fund.fund_name,
+            fund.management_company,
+            fund.is_etf,
+        )
+        aum_chg, perf, flow = estimate_fund_flow_from_returns(fund.aum)
+        extraction.top_distributors = top_dist
+        extraction.primary_broker = primary
+        extraction.sales_pitch_action = action
+        extraction.estimated_net_inflow = flow
+        extraction.performance_effect = perf
+        extraction.aum_change = aum_chg
+
     return extraction
+
 
 
 def _apply_llm_if_needed(
@@ -410,8 +434,9 @@ def extract_benchmark_for_fund(
         final.confidence = Confidence.LOW
         final.needs_review = True
 
-    final = _finalize_extraction(final)
+    final = _finalize_extraction(final, fund)
     return BenchmarkRecord.from_fund(fund, final)
+
 
 
 def run_stage5(*, use_llm: bool = True, provider: str | None = None, model: str | None = None) -> list[BenchmarkRecord]:

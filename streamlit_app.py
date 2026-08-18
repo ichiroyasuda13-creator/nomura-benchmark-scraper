@@ -1,9 +1,11 @@
 """Streamlit web app for Multi-Asset Management Benchmark Scraper & Intelligence.
 
-Supports:
-- 野村アセットマネジメント (Nomura AM)
-- 大和アセットマネジメント (Daiwa AM)
-- 三菱UFJアセットマネジメント (MUAM)
+Features:
+- Multi-Asset Managers: 野村アセット, 大和アセット, 三菱UFJアセット
+- Net Inflow (買い付け金額 / 推定純流入) & Performance Effect Calculation
+- Broker & Distributor Intelligence (主要販売会社 & 販社別売れ行き)
+- Theme & Gap Analysis for Consultative Product Proposals
+- Interactive Data Editor & 4-Sheet Excel Generation
 """
 
 from __future__ import annotations
@@ -36,15 +38,26 @@ from app.config import (
     ensure_dirs,
 )
 from app.daiwa_stage1 import run_stage1_daiwa
+from app.distributors import build_broker_theme_sales_matrix, resolve_fund_distributors
+from app.flow_calculator import estimate_fund_flow_from_returns
 from app.http_client import load_json, save_json, setup_logging
 from app.llm import get_available_providers, llm_available
-from app.models import BenchmarkRecord, Confidence, Fund, FundType, format_aum_oku
+from app.models import (
+    BenchmarkRecord,
+    Confidence,
+    Fund,
+    FundType,
+    format_aum_oku,
+    format_inflow_oku,
+)
 from app.muam_stage1 import run_stage1_muam
+from app.proposal_generator import generate_product_proposals
 from app.stage5_benchmark import reextract_single_fund, update_manual_override
+from app.theme_classifier import THEMES, classify_fund_theme
 
 # ── Page Config ────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="ファンド・ベンチマーク抽出 & MSCI営業インテリジェンス",
+    page_title="ファンド・ベンチマーク抽出 & 販社営業インテリジェンス",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -90,33 +103,58 @@ st.markdown("""
     /* KPI Cards */
     .kpi-container {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
-        gap: 1rem;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 0.8rem;
         margin-bottom: 1.5rem;
     }
     .kpi-box {
         background: rgba(15, 23, 42, 0.7);
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 12px;
-        padding: 1.2rem;
+        padding: 1.1rem 0.8rem;
         text-align: center;
         backdrop-filter: blur(12px);
     }
     .kpi-box-title {
-        font-size: 0.72rem;
+        font-size: 0.70rem;
         color: #64748b;
         text-transform: uppercase;
         font-weight: 700;
     }
     .kpi-box-num {
-        font-size: 1.9rem;
+        font-size: 1.7rem;
         font-weight: 800;
         margin: 4px 0;
         color: #f8fafc;
     }
     .kpi-box-sub {
-        font-size: 0.78rem;
+        font-size: 0.75rem;
         color: #94a3b8;
+    }
+
+    /* Proposal Pitch Cards */
+    .proposal-card {
+        background: rgba(30, 41, 59, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        padding: 1.2rem;
+        margin-bottom: 1rem;
+    }
+    .proposal-badge-gap {
+        background: #ef4444;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 700;
+    }
+    .proposal-badge-ok {
+        background: #10b981;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 700;
     }
 
     #MainMenu { visibility: hidden; }
@@ -192,20 +230,20 @@ def run_pipeline(
 
     # Stage 5
     prov_label = provider or "Auto"
-    prog_bar.progress(5 / 7, text=f"Stage 5/6: ベンチマーク抽出中 (LLM: {prov_label})...")
-    status_text.info(f"Stage 5: ベンチマーク指数と提供者を抽出中 (LLM Provider: {prov_label})...")
+    prog_bar.progress(5 / 7, text=f"Stage 5/6: ベンチマーク・純流入・販社抽出中 (LLM: {prov_label})...")
+    status_text.info(f"Stage 5: ベンチマーク指数・推定純流入・主要販社を分析中 (LLM Provider: {prov_label})...")
     records = run_stage5(use_llm=use_llm, provider=provider)
-    log(f"Stage 5 完了: {len(records)} 本のベンチマーク抽出完了")
+    log(f"Stage 5 完了: {len(records)} 本のベンチマーク・フロー分析完了")
 
     # Save company-specific copy
     comp_json = DATA_DIR / f"{company_id}_benchmarks.json"
     save_json(comp_json, [r.model_dump(mode="json") for r in records])
 
     # Stage 6
-    prog_bar.progress(6 / 7, text="Stage 6/6: 多機能Excel & CSV出力中...")
-    status_text.info("Stage 6: スタイル適用済み多機能ExcelレポートとCSVを生成中...")
+    prog_bar.progress(6 / 7, text="Stage 6/6: 4シート構成Excel & CSV出力中...")
+    status_text.info("Stage 6: スタイル適用済み多機能Excelレポート（4シート）とCSVを生成中...")
     run_stage6(records)
-    log("Stage 6 完了: Excel / CSV 出力完了")
+    log("Stage 6 完了: Excel (4シート) / CSV 出力完了")
 
     prog_bar.progress(1.0, text="✅ 全ステージ完了!")
     status_text.success(f"✅ {company_name} のパイプラインが正常に完了しました!")
@@ -228,9 +266,9 @@ def load_records_for_company(company_id: str) -> list[BenchmarkRecord]:
 def main() -> None:
     st.markdown("""
     <div class="app-header">
-        <div class="header-badge">ENTERPRISE EDITION</div>
-        <h1>📊 ファンド・ベンチマーク抽出 & MSCI営業インテリジェンス</h1>
-        <p>野村・大和・三菱UFJ 3大運用会社対応 ｜ 交付目論見書PDFからのマルチLLMベンチマーク自動抽出 & マーケットシェア分析</p>
+        <div class="header-badge">CONSULTATIVE SALES INTELLIGENCE</div>
+        <h1>📊 ファンド・ベンチマーク抽出 & 販社営業インテリジェンス</h1>
+        <p>野村・大和・三菱UFJ 3大運用会社対応 ｜ 資金純流入額（買い付け金額）推定 × 主要販売会社 × 商品企画マッチング</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -327,10 +365,11 @@ def main() -> None:
         return
 
     # ── Top Level Tabs ─────────────────────────────────────────────────────
-    tab1, tab2, tab3 = st.tabs([
-        f"📈 {selected_company_name} マーケット & MSCI営業分析",
-        "📋 ファンド一覧 & レビュー",
-        "🔍 目論見書インスペクター & 単体再抽出",
+    tab1, tab2, tab3, tab4 = st.tabs([
+        f"📈 {selected_company_name} マーケット & 資金流入分析",
+        "📋 ファンド一覧 & 純流入・販社レビュー",
+        "💡 商品企画提案 & 販社マッチング",
+        "🔍 目論見書 & フローインスペクター",
     ])
 
     # ── Calculate Metrics ──────────────────────────────────────────────────
@@ -339,7 +378,8 @@ def main() -> None:
     msci_records = [r for r in records if r.is_msci]
     msci_aum = sum(r.aum for r in msci_records)
     msci_count = len(msci_records)
-    review_count = sum(1 for r in records if r.needs_review)
+    total_inflow = sum(r.estimated_net_inflow for r in records)
+    non_msci_inflow = sum(r.estimated_net_inflow for r in records if not r.is_msci)
 
     msci_aum_share = (msci_aum / total_aum * 100) if total_aum else 0
     msci_count_share = (msci_count / total_count * 100) if total_count else 0
@@ -356,19 +396,24 @@ def main() -> None:
                 <div class="kpi-box-sub">AUM合計: {total_aum / 1e12:.2f} 兆円</div>
             </div>
             <div class="kpi-box">
-                <div class="kpi-box-title">MSCI 採用ファンド数</div>
-                <div class="kpi-box-num" style="color: #38bdf8;">{msci_count}</div>
-                <div class="kpi-box-sub">件数シェア: {msci_count_share:.1f}%</div>
-            </div>
-            <div class="kpi-box">
                 <div class="kpi-box-title">MSCI 採用 AUM</div>
                 <div class="kpi-box-num" style="color: #34d399;">{msci_aum / 1e12:.2f} 兆円</div>
-                <div class="kpi-box-sub">AUMシェア: {msci_aum_share:.1f}%</div>
+                <div class="kpi-box-sub">AUMシェア: {msci_aum_share:.1f}% ({msci_count}本)</div>
+            </div>
+            <div class="kpi-box">
+                <div class="kpi-box-title">総 推定純流入額</div>
+                <div class="kpi-box-num" style="color: {'#38bdf8' if total_inflow >= 0 else '#f87171'};">{format_inflow_oku(total_inflow)}</div>
+                <div class="kpi-box-sub">直近純資金フロー</div>
+            </div>
+            <div class="kpi-box">
+                <div class="kpi-box-title">非MSCI 純流入額 (攻めどころ)</div>
+                <div class="kpi-box-num" style="color: #fbbf24;">{format_inflow_oku(non_msci_inflow)}</div>
+                <div class="kpi-box-sub">リプレイス・新規提案余地</div>
             </div>
             <div class="kpi-box">
                 <div class="kpi-box-title">要確認 (レビュー待ち)</div>
-                <div class="kpi-box-num" style="color: #fbbf24;">{review_count}</div>
-                <div class="kpi-box-sub">確度要確認または未確定</div>
+                <div class="kpi-box-num" style="color: #cbd5e1;">{sum(1 for r in records if r.needs_review)}</div>
+                <div class="kpi-box-sub">要レビュー件数</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -376,65 +421,86 @@ def main() -> None:
         col_a1, col_a2 = st.columns([1, 1])
 
         with col_a1:
-            st.subheader("🏛️ 指数提供者別 AUMシェア")
-            prov_agg: dict[str, dict] = {}
-            for r in records:
-                p = r.index_provider or "なし"
-                if p not in prov_agg:
-                    prov_agg[p] = {"provider": p, "aum_oku": 0.0, "count": 0, "is_msci": r.is_msci}
-                prov_agg[p]["aum_oku"] += r.aum / 1e8
-                prov_agg[p]["count"] += 1
-
-            prov_df = pd.DataFrame(list(prov_agg.values()))
-            prov_df.sort_values(by="aum_oku", ascending=False, inplace=True)
-            prov_df["aum_share"] = (prov_df["aum_oku"] / (total_aum / 1e8) * 100).round(1)
-
+            st.subheader("🔥 資金純流入ランキング (Top Net Inflows)")
+            sorted_by_flow = sorted(records, key=lambda x: x.estimated_net_inflow, reverse=True)[:10]
+            flow_df = pd.DataFrame([
+                {
+                    "ファンド名": r.fund_name[:20] + "...",
+                    "推定純流入 (億円)": round(r.estimated_net_inflow / 1e8, 1),
+                    "MSCI": "MSCI" if r.is_msci else "他社",
+                }
+                for r in sorted_by_flow
+            ])
             st.bar_chart(
-                prov_df.set_index("provider")["aum_oku"],
-                color="#6366f1",
-                x_label="指数提供者",
-                y_label="純資産総額 (億円)",
+                flow_df.set_index("ファンド名")["推定純流入 (億円)"],
+                color="#38bdf8",
+                x_label="ファンド",
+                y_label="純流入額 (億円)",
             )
 
         with col_a2:
-            st.subheader(f"🎯 {selected_company_name} 営業ターゲット (非MSCI高AUM)")
-            non_msci = [r for r in records if not r.is_msci and r.aum > 0]
-            non_msci.sort(key=lambda x: x.aum, reverse=True)
+            st.subheader("🏷️ テーマ別 純資産 & 純流入額")
+            theme_agg: dict[str, dict] = {}
+            for r in records:
+                t = r.theme_category or "全世界・先進国株式"
+                if t not in theme_agg:
+                    theme_agg[t] = {"theme": t, "aum_oku": 0.0, "inflow_oku": 0.0, "count": 0}
+                theme_agg[t]["aum_oku"] += r.aum / 1e8
+                theme_agg[t]["inflow_oku"] += r.estimated_net_inflow / 1e8
+                theme_agg[t]["count"] += 1
 
-            targets_data = []
-            for t in non_msci[:8]:
-                targets_data.append({
-                    "順位": t.rank,
-                    "ファンド名": t.fund_name,
-                    "AUM (億円)": round(t.aum / 1e8, 0),
-                    "現ベンチマーク": t.benchmark or "—",
-                    "現提供会社": t.index_provider,
-                })
-            targets_df = pd.DataFrame(targets_data)
+            theme_df = pd.DataFrame(list(theme_agg.values()))
+            theme_df.sort_values(by="inflow_oku", ascending=False, inplace=True)
             st.dataframe(
-                targets_df,
+                theme_df.rename(columns={
+                    "theme": "テーマ分類",
+                    "count": "本数",
+                    "aum_oku": "AUM合計(億円)",
+                    "inflow_oku": "純流入合計(億円)",
+                }),
                 use_container_width=True,
                 hide_index=True,
             )
+
+        st.divider()
+        st.subheader(f"🎯 {selected_company_name} 営業ターゲット（資金流入が大きく非MSCIのファンド）")
+        non_msci = [r for r in records if not r.is_msci and r.aum > 0]
+        non_msci.sort(key=lambda x: (x.estimated_net_inflow, x.aum), reverse=True)
+
+        targets_data = []
+        for t in non_msci[:10]:
+            targets_data.append({
+                "順位": t.rank,
+                "ファンド名": t.fund_name,
+                "AUM (億円)": round(t.aum / 1e8, 0),
+                "推定純流入 (億円)": format_inflow_oku(t.estimated_net_inflow),
+                "テーマ": t.theme_category,
+                "現ベンチマーク": t.benchmark or "—",
+                "主要販売会社 (Broker)": t.top_distributors or t.primary_broker or "主要証券",
+                "営業アクション (Who to Call)": t.sales_pitch_action or "🎯 アプローチ対象",
+            })
+        targets_df = pd.DataFrame(targets_data)
+        st.dataframe(
+            targets_df,
+            use_container_width=True,
+            hide_index=True,
+        )
 
     # ═══════════════════════════════════════════════════════════════════════
     # TAB 2: FUND LIST & INTERACTIVE REVIEW
     # ═══════════════════════════════════════════════════════════════════════
     with tab2:
         col_f1, col_f2, col_f3, col_f4 = st.columns([2, 1, 1, 2])
-        search_query = col_f1.text_input("🔍 検索", placeholder="ファンド名・コード・ベンチマーク...")
-        prov_filter = col_f2.selectbox(
-            "指数提供者",
-            options=["全て"] + sorted(list({r.index_provider for r in records if r.index_provider})),
-        )
+        search_query = col_f1.text_input("🔍 検索", placeholder="ファンド名・コード・ベンチマーク・販社...")
+        theme_filter = col_f2.selectbox("テーマ分類", options=["全て"] + THEMES)
         review_filter = col_f3.selectbox(
             "ステータス",
-            options=["全て", "要確認のみ", "OKのみ", "手動編集のみ"],
+            options=["全て", "純流入プラスのみ", "非MSCIのみ", "要確認のみ", "手動編集のみ"],
         )
 
         # Export buttons
         with col_f4:
-            st.write("📥 ダウンロード")
+            st.write("📥 レポート出力 (4シート構成)")
             col_d1, col_d2 = st.columns(2)
             xlsx_path = OUTPUT_DIR / "nomura_benchmarks.xlsx"
             csv_path = OUTPUT_DIR / "nomura_benchmarks.csv"
@@ -442,9 +508,9 @@ def main() -> None:
             if xlsx_path.exists():
                 with open(xlsx_path, "rb") as f:
                     col_d1.download_button(
-                        "📊 Excel",
+                        "📊 Excel (4シート)",
                         f.read(),
-                        file_name=f"{selected_company_id}_benchmarks.xlsx",
+                        file_name=f"{selected_company_id}_benchmarks_intelligence.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
             if csv_path.exists():
@@ -462,14 +528,16 @@ def main() -> None:
             q = search_query.lower()
             filtered_records = [
                 r for r in filtered_records
-                if q in r.fund_name.lower() or q in r.fund_code.lower() or q in (r.benchmark or "").lower()
+                if q in r.fund_name.lower() or q in r.fund_code.lower() or q in (r.benchmark or "").lower() or q in (r.top_distributors or "").lower()
             ]
-        if prov_filter != "全て":
-            filtered_records = [r for r in filtered_records if r.index_provider == prov_filter]
-        if review_filter == "要確認のみ":
+        if theme_filter != "全て":
+            filtered_records = [r for r in filtered_records if r.theme_category == theme_filter]
+        if review_filter == "純流入プラスのみ":
+            filtered_records = [r for r in filtered_records if r.estimated_net_inflow > 0]
+        elif review_filter == "非MSCIのみ":
+            filtered_records = [r for r in filtered_records if not r.is_msci]
+        elif review_filter == "要確認のみ":
             filtered_records = [r for r in filtered_records if r.needs_review]
-        elif review_filter == "OKのみ":
-            filtered_records = [r for r in filtered_records if not r.needs_review]
         elif review_filter == "手動編集のみ":
             filtered_records = [r for r in filtered_records if r.manual_override]
 
@@ -481,11 +549,14 @@ def main() -> None:
                 "ファンド名": r.fund_name,
                 "コード": r.fund_code,
                 "AUM (億円)": round(r.aum / 1e8, 0) if r.aum else 0,
-                "ファンド種別": r.fund_type.value if hasattr(r.fund_type, "value") else str(r.fund_type),
+                "推定純流入 (億円)": format_inflow_oku(r.estimated_net_inflow),
+                "運用効果 (億円)": format_inflow_oku(r.performance_effect),
+                "テーマ分類": r.theme_category or "全世界・先進国株式",
                 "ベンチマーク指数": r.benchmark or "",
                 "指数提供者": r.index_provider or "なし",
                 "MSCI": "🟢 MSCI" if r.is_msci else "⚪ 他社",
-                "信頼度": r.confidence.value if hasattr(r.confidence, "value") else str(r.confidence),
+                "主要販売会社 (Broker)": r.top_distributors or r.primary_broker or "主要証券",
+                "営業アクション": r.sales_pitch_action or "",
                 "要確認": r.needs_review,
                 "レビューメモ": r.review_comment or "",
                 "手動": "✏️" if r.manual_override else "",
@@ -493,13 +564,13 @@ def main() -> None:
 
         table_df = pd.DataFrame(edit_rows)
 
-        st.caption(f"該当件数: {len(table_df)} 件 (テーブル内をダブルクリックでベンチマーク指数や提供者を直接編集できます)")
+        st.caption(f"該当件数: {len(table_df)} 件 (テーブル内をダブルクリックでベンチマーク指数・提供者・テーマ・メモを直接編集できます)")
         edited_df = st.data_editor(
             table_df,
             use_container_width=True,
             hide_index=True,
             height=500,
-            disabled=["順位", "ファンド名", "コード", "AUM (億円)", "MSCI", "信頼度", "手動"],
+            disabled=["順位", "ファンド名", "コード", "AUM (億円)", "推定純流入 (億円)", "運用効果 (億円)", "MSCI", "手動"],
         )
 
         # Save changes button
@@ -509,36 +580,101 @@ def main() -> None:
                 code = row["コード"]
                 bm = row["ベンチマーク指数"]
                 prov = row["指数提供者"]
-                ft = row["ファンド種別"]
+                theme = row["テーマ分類"]
+                dist = row["主要販売会社 (Broker)"]
+                action = row["営業アクション"]
                 needs_rev = bool(row["要確認"])
                 comm = str(row["レビューメモ"])
 
                 orig = next((r for r in records if r.fund_code == code), None)
-                if orig and (orig.benchmark != bm or orig.index_provider != prov or orig.needs_review != needs_rev or orig.review_comment != comm):
+                if orig and (orig.benchmark != bm or orig.index_provider != prov or orig.theme_category != theme or orig.top_distributors != dist or orig.sales_pitch_action != action or orig.needs_review != needs_rev or orig.review_comment != comm):
                     update_manual_override(
                         fund_code=code,
                         benchmark=bm,
                         index_provider=prov,
-                        fund_type=ft,
                         needs_review=needs_rev,
                         comment=comm,
                         reviewer="Streamlit Analyst",
                     )
+                    orig.theme_category = theme
+                    orig.top_distributors = dist
+                    orig.sales_pitch_action = action
                     updated_count += 1
 
             if updated_count > 0:
+                comp_json = DATA_DIR / f"{selected_company_id}_benchmarks.json"
+                save_json(comp_json, [r.model_dump(mode="json") for r in records])
                 st.success(f"✅ {updated_count} 件の変更を保存しました!")
-                st.session_state[f"records_{selected_company_id}"] = load_records_for_company(selected_company_id)
+                st.session_state[f"records_{selected_company_id}"] = records
                 st.rerun()
             else:
                 st.info("変更はありませんでした。")
 
     # ═══════════════════════════════════════════════════════════════════════
-    # TAB 3: PROSPECTUS INSPECTOR & SINGLE RE-EXTRACTION
+    # TAB 3: PRODUCT PROPOSALS & BROKER MATCHMAKER
     # ═══════════════════════════════════════════════════════════════════════
     with tab3:
-        st.subheader("🔍 目論見書インスペクター & 単体再抽出")
-        fund_options = {r.fund_code: f"#{r.rank} - {r.fund_name} ({format_aum_oku(r.aum)})" for r in records}
+        st.subheader(f"💡 {selected_company_name} 向け 商品企画提案 & 販社マッチング")
+        st.write("運用会社の商品企画部へ「**今どのテーマに資金が集まっており、どの販売会社と組めば最も売れるか**」を提案するためのコンサルティングインテリジェンスです。")
+
+        proposals = generate_product_proposals(records, selected_company_name)
+
+        col_p1, col_p2 = st.columns([1, 1])
+
+        with col_p1:
+            st.markdown("### 🧩 商品ラインアップ・ギャップ分析")
+            for prop in proposals:
+                is_gap = "ギャップ" in prop["status"]
+                badge_class = "proposal-badge-gap" if is_gap else "proposal-badge-ok"
+                st.markdown(f"""
+                <div class="proposal-card">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 1.1rem; font-weight: 700;">{prop['theme']}</span>
+                        <span class="{badge_class}">{prop['status']}</span>
+                    </div>
+                    <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 6px;">
+                        自社現保有本数: <b>{prop['existing_funds_count']} 本</b> ｜ 自社AUM: <b>{prop['theme_aum_display']}</b> ｜ 自社純流入: <b>{prop['theme_inflow_display']}</b>
+                    </div>
+                    <div style="background: rgba(15, 23, 42, 0.6); padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; margin-top: 8px;">
+                        <b style="color: #38bdf8;">推奨MSCI指数:</b> {prop['recommended_msci_index']}<br/>
+                        <b style="color: #fbbf24;">最適主幹販社:</b> {prop['best_selling_brokers']}<br/>
+                        <span style="color: #cbd5e1; font-size: 0.8rem;">{prop['proposal_narrative']}</span>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+        with col_p2:
+            st.markdown("### 🏢 販社 × テーマ別 売れ行きマトリクス")
+            st.caption("どの販売会社経由だと、どのテーマが最も売れているかを可視化")
+
+            matrix_rows = build_broker_theme_sales_matrix(records)
+            matrix_df = pd.DataFrame([
+                {
+                    "販売会社 (Broker)": m["broker"],
+                    "得意テーマ": m["theme"],
+                    "取扱本数": m["fund_count"],
+                    "AUM合計 (億円)": round(m["total_aum"] / 1e8, 1),
+                    "推定純流入 (億円)": format_inflow_oku(m["total_inflow"]),
+                }
+                for m in matrix_rows[:12]
+            ])
+            st.dataframe(
+                matrix_df,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.markdown("""
+            > **💡 提案トークの活用例**:
+            > *「御社のラインアップにはAI・半導体分野が不足しています。市場ではこのテーマに年間+2,000億円超の純流入が発生しており、特に**SBI証券・楽天証券**での売れ行きが突出しています。ぜひ**MSCI AI & Robotics指数**を採用し、ネット証券を主幹販社とした新商品を企画しませんか？」*
+            """)
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # TAB 4: PROSPECTUS INSPECTOR & SINGLE RE-EXTRACTION
+    # ═══════════════════════════════════════════════════════════════════════
+    with tab4:
+        st.subheader("🔍 目論見書 & フローインスペクター")
+        fund_options = {r.fund_code: f"#{r.rank} - {r.fund_name} ({format_aum_oku(r.aum)} / {format_inflow_oku(r.estimated_net_inflow)})" for r in records}
         selected_code = st.selectbox(
             "確認するファンドを選択",
             options=list(fund_options.keys()),
@@ -552,12 +688,12 @@ def main() -> None:
 
             with col_i1:
                 st.markdown(f"### {selected_record.fund_name}")
-                st.write(f"**運用会社**: `{selected_company_name}`")
-                st.write(f"**ファンドコード**: `{selected_record.fund_code}` | **純資産**: {format_aum_oku(selected_record.aum)}")
-                st.write(f"**現在のベンチマーク**: `{selected_record.benchmark or 'なし'}`")
-                st.write(f"**指数提供会社**: `{selected_record.index_provider}` | **MSCI採用**: {'🟢 はい' if selected_record.is_msci else 'いいえ'}")
-                st.write(f"**抽出方法**: `{selected_record.extraction_method}` | **信頼度**: `{selected_record.confidence}`")
-                st.write(f"**要確認**: {'⚠️ 要確認' if selected_record.needs_review else '✅ 確認済み'}")
+                st.write(f"**運用会社**: `{selected_company_name}` ｜ **テーマ**: `{selected_record.theme_category}`")
+                st.write(f"**純資産(AUM)**: {format_aum_oku(selected_record.aum)} ｜ **推定純流入**: `{format_inflow_oku(selected_record.estimated_net_inflow)}`")
+                st.write(f"**現在のベンチマーク**: `{selected_record.benchmark or 'なし'}` ({selected_record.index_provider})")
+                st.write(f"**MSCI採用**: {'🟢 はい' if selected_record.is_msci else 'いいえ'}")
+                st.write(f"**主要販売会社**: `{selected_record.top_distributors or '主要証券'}`")
+                st.write(f"**営業アクション**: `{selected_record.sales_pitch_action or '—'}`")
 
                 if selected_record.prospectus_pdf_url:
                     st.link_button("📄 交付目論見書PDFを開く", selected_record.prospectus_pdf_url)
