@@ -8,7 +8,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.config import BENCHMARKS_JSON, FUNDS_JSON, PDF_DIR, TEXT_DIR
+from app.config import BENCHMARKS_JSON, DATA_DIR, FUNDS_JSON, PDF_DIR, TEXT_DIR
 from app.http_client import load_json, save_json
 from app.llm import extract_with_llm, llm_available
 from app.models import (

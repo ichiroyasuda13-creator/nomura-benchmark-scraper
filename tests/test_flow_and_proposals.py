@@ -132,3 +132,19 @@ def test_funds_grouped_by_distributor_magazine_format(tmp_path):
     create_styled_excel(records, excel_file)
     assert excel_file.exists()
 
+
+def test_update_manual_override_function():
+    from app.stage5_benchmark import update_manual_override
+
+    # Test that calling update_manual_override does not raise NameError
+    res = update_manual_override(
+        fund_code="0131102B",
+        benchmark="MSCI-KOKUSAI",
+        index_provider="MSCI",
+        needs_review=False,
+        comment="Test manual edit",
+        reviewer="Tester",
+    )
+    # Even if file doesn't exist, it should execute cleanly without NameError
+
+
