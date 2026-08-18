@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -20,36 +21,60 @@ class NameIndexRule:
 
 PROVIDER_RULES: tuple[ProviderRule, ...] = (
     ProviderRule(
-        ("MSCI", "コクサイ", "KOKUSAI", "ACWI", "エマージング"),
+        ("MSCI", "コクサイ", "KOKUSAI", "ACWI", "エマージング", "ALL COUNTRY", "オルカン"),
         "MSCI",
     ),
     ProviderRule(
-        ("TOPIX", "東証株価指数", "東証REIT", "東証"),
+        ("TOPIX", "東証株価指数", "東証REIT", "東証", "JPXプライム150", "東証プライム", "東証グロース", "東証スタンダード"),
         "JPX/東証",
     ),
     ProviderRule(
-        ("JPX日経", "JPX日経インデックス400"),
+        ("JPX日経", "JPX日経インデックス400", "JPX日経400", "JPX日経中小型"),
         "JPX/日経",
     ),
     ProviderRule(
-        ("日経平均", "日経225", "日経半導体", "日経高配当", "日経"),
+        ("日経平均", "日経225", "日経半導体", "日経高配当", "日経アジア300", "日経500", "日経"),
         "日本経済新聞社",
     ),
     ProviderRule(
-        ("NOMURA-BPI", "野村BPI", "NOMURA BPI", "野村総合"),
+        ("NOMURA-BPI", "野村BPI", "NOMURA BPI", "野村総合", "野村ボンド"),
         "野村",
     ),
     ProviderRule(
-        ("FTSE", "ラッセル", "Russell"),
+        ("FTSE", "ラッセル", "Russell", "ラッセル野村"),
         "FTSE Russell",
     ),
     ProviderRule(
-        ("S&P", "S＆P", "ダウ", "DOW"),
+        ("S&P", "S＆P", "ダウ", "DOW", "NYダウ", "Dow Jones"),
         "S&P DJI",
     ),
     ProviderRule(
         ("NASDAQ", "ナスダック"),
         "Nasdaq",
+    ),
+    ProviderRule(
+        ("ブルームバーグ", "Bloomberg", "Barclays", "バークレイズ", "Bbg"),
+        "ブルームバーグ",
+    ),
+    ProviderRule(
+        ("ICE", "BofA", "Bank of America", "Merrill Lynch", "メリルリンチ"),
+        "ICE Data Indices",
+    ),
+    ProviderRule(
+        ("ソラクティブ", "Solactive"),
+        "Solactive",
+    ),
+    ProviderRule(
+        ("モーニングスター", "Morningstar"),
+        "Morningstar",
+    ),
+    ProviderRule(
+        ("STOXX", "EURO STOXX", "ストックス"),
+        "STOXX",
+    ),
+    ProviderRule(
+        ("ハンセン", "Hang Seng", "CSI300", "CSI 300", "中華網"),
+        "Hang Seng / CSI",
     ),
 )
 
@@ -66,6 +91,7 @@ NAME_INDEX_RULES: tuple[NameIndexRule, ...] = tuple(
         (r"MSCI.*インド", "MSCI インディア", "MSCI"),
         (r"MSCI.*ジャパン|MSCIジャパン", "MSCI ジャパン", "MSCI"),
         (r"TOPIX|東証株価指数", "TOPIX", "JPX/東証"),
+        (r"JPXプライム150", "JPXプライム150指数", "JPX/東証"),
         (r"日経(平均|225)|日経２２５", "日経225", "日本経済新聞社"),
         (r"JPX日経(インデックス)?400", "JPX日経インデックス400", "JPX/日経"),
         (r"東証REIT|J-?REIT", "東証REIT指数", "JPX/東証"),
@@ -73,7 +99,9 @@ NAME_INDEX_RULES: tuple[NameIndexRule, ...] = tuple(
         (r"S&P\s?500|S＆P500", "S&P 500", "S&P DJI"),
         (r"NOMURA-?BPI|野村BPI", "NOMURA-BPI総合", "野村"),
         (r"FTSE.*世界国債|世界国債インデックス", "FTSE世界国債インデックス", "FTSE Russell"),
-        (r"Russell/?Nomura|ラッセル野村", "Russell/Nomura", "FTSE Russell / 野村"),
+        (r"Russell/?Nomura|ラッセル野村", "Russell/Nomura", "FTSE Russell"),
+        (r"ブルームバーグ.*グローバル|Bloomberg.*Global", "Bloomberg Global Aggregate", "ブルームバーグ"),
+        (r"ソラクティブ|Solactive", "Solactive Index", "Solactive"),
     )
 )
 
@@ -155,7 +183,51 @@ INDEX_NAME_HINTS: tuple[str, ...] = (
     "コクサイ",
     "KOKUSAI",
     "ACWI",
+    "ブルームバーグ",
+    "Bloomberg",
+    "Solactive",
+    "ソラクティブ",
+    "Morningstar",
+    "STOXX",
+    "Barclays",
 )
+
+# Trailing parenthetical noise patterns to strip from index names
+TRAILING_NOISE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"[（\(](?:対象株価指数|対象インデックス|対象指数|以下「?[^）\)]*?」?(?:といいます)?|以下同じ|基準価額)[）\)]\s*$", re.I),
+    re.compile(r"（以下[^）]*といいます）\s*$", re.I),
+    re.compile(r"（以下[^）]*）\s*$", re.I),
+    re.compile(r"（対象株価指数）\s*$", re.I),
+    re.compile(r"（対象インデックス）\s*$", re.I),
+    re.compile(r"（対象指数）\s*$", re.I),
+)
+
+
+def is_money_market_fund(fund_name: str) -> bool:
+    """Check if fund is a money reserve fund or short-term cash management fund without a benchmark."""
+    norm = unicodedata.normalize("NFKC", fund_name).upper()
+    keywords = ("MRF", "マネー・リザーブ", "マネープール", "公社債投信", "公社債ファンド", "短期公社債", "MMF")
+    return any(kw in norm for kw in keywords)
+
+
+def clean_index_name(raw: str) -> str:
+    cleaned = raw.strip(" 　「」『』\"'・:：。、\n")
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    cleaned = re.sub(r"^ファンドの(?:目的|特色)\s*", "", cleaned)
+    cleaned = re.sub(r"^本ファンドは[、,]?\s*", "", cleaned)
+    cleaned = re.sub(r"^(は|を|に|の|、|，|および|又は|または)+", "", cleaned)
+    if cleaned.startswith("本ファンドは"):
+        cleaned = cleaned.split("、", 1)[-1]
+
+    # Strip trailing parenthetical noise like （対象株価指数） repeatedly until clean
+    for _ in range(3):
+        prev = cleaned
+        for noise_pat in TRAILING_NOISE_PATTERNS:
+            cleaned = noise_pat.sub("", cleaned).strip()
+        if cleaned == prev:
+            break
+
+    return cleaned.strip(" 　、。")
 
 
 def is_valid_benchmark_name(name: str | None) -> bool:
@@ -168,13 +240,12 @@ def is_valid_benchmark_name(name: str | None) -> bool:
         return False
     if "連動する投資成果" in cleaned or "基準価額の変動率" in cleaned:
         return False
-    if cleaned in {"（対象株価指数）", "対象指数（以下", "対象指数（"}:
+    if cleaned in {"（対象株価指数）", "対象指数（以下", "対象指数（", "対象株価指数"}:
         return False
     if any(hint in cleaned for hint in INDEX_NAME_HINTS):
         return True
     if detect_index_provider(cleaned) != "なし":
         return True
-    # アクティブ型の外部指数（Bloomberg 等）は「指数」を含まないこともある
     return len(cleaned) >= 8
 
 
@@ -182,17 +253,6 @@ def normalize_for_match(text: str) -> str:
     normalized = unicodedata.normalize("NFKC", text).upper()
     normalized = re.sub(r"[・\s　\-－/／]", "", normalized)
     return normalized
-
-
-def clean_index_name(raw: str) -> str:
-    cleaned = raw.strip(" 　「」『』\"'・:：。、\n")
-    cleaned = re.sub(r"\s+", " ", cleaned)
-    cleaned = re.sub(r"^ファンドの(?:目的|特色)\s*", "", cleaned)
-    cleaned = re.sub(r"^本ファンドは[、,]?\s*", "", cleaned)
-    cleaned = re.sub(r"^(は|を|に|の|、|，|および|又は|または)+", "", cleaned)
-    if cleaned.startswith("本ファンドは"):
-        cleaned = cleaned.split("、", 1)[-1]
-    return cleaned.strip()
 
 
 def detect_index_provider(
@@ -230,7 +290,7 @@ def is_msci_benchmark(benchmark: str | None, index_provider: str) -> bool:
     normalized = normalize_for_match(benchmark)
     return any(
         normalize_for_match(keyword) in normalized
-        for keyword in ("MSCI", "コクサイ", "KOKUSAI", "ACWI")
+        for keyword in ("MSCI", "コクサイ", "KOKUSAI", "ACWI", "オルカン")
     )
 
 
@@ -266,3 +326,23 @@ def is_index_like_fund_name(fund_name: str, *, is_etf: bool = False) -> bool:
 
 def has_rendou_trigger(text: str) -> bool:
     return bool(RENDOU_TRIGGER_PATTERN.search(text))
+
+
+def parse_composite_components(text: str) -> list[dict[str, Any]]:
+    """Parse composite benchmark percentages and index names from prospectus text."""
+    parts = re.findall(
+        r"([^\d\n\r]{2,30}?)?\s*(\d+(?:\.\d+)?)\s*[％%×x]\s*([A-Za-z0-9\-・（）\(\)ぁ-んァ-ヶ一-龠]+(?:指数|Index|TOPIX|MSCI|BPI|FTSE|Russell|S&P|NASDAQ|日経|Bond)[A-Za-z0-9\-・（）\(\)]*)",
+        text,
+        flags=re.I,
+    )
+    components = []
+    for asset_class, weight_str, index_name in parts:
+        cleaned_idx = clean_index_name(index_name)
+        if len(cleaned_idx) >= 3 and is_valid_benchmark_name(cleaned_idx):
+            components.append({
+                "index": cleaned_idx,
+                "weight": float(weight_str),
+                "asset_class": (asset_class or "").strip(" 　、・:："),
+            })
+    return components
+

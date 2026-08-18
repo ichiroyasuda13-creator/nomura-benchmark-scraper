@@ -101,6 +101,10 @@ class BenchmarkRecord(BaseModel):
     source_page_detail_url: str = ""
     note: str = ""
     needs_review: bool = True
+    manual_override: bool = False
+    review_comment: str = ""
+    reviewed_at: Optional[datetime] = None
+    reviewed_by: Optional[str] = None
 
     @classmethod
     def from_fund(
@@ -137,6 +141,10 @@ class BenchmarkRecord(BaseModel):
             source_page_detail_url=fund.detail_url,
             note=extraction.note,
             needs_review=extraction.needs_review,
+            manual_override=False,
+            review_comment="",
+            reviewed_at=None,
+            reviewed_by=None,
         )
 
 
@@ -159,3 +167,15 @@ def parse_aum_yen(raw: float | int | str | None) -> float:
     if not text:
         return 0.0
     return float(text)
+
+
+def format_aum_oku(aum: float) -> str:
+    """Format AUM in 億円 (hundred million yen)."""
+    if not aum:
+        return "—"
+    oku = aum / 1e8
+    if oku >= 10000:
+        cho = oku / 10000
+        return f"{cho:,.1f}兆円"
+    return f"{oku:,.0f}億円"
+

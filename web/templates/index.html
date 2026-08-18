@@ -4,8 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>野村ベンチマーク抽出ツール</title>
-    <meta name="description" content="野村アセットマネジメントの公募ファンドからベンチマーク指数を自動抽出するWebアプリケーション">
+    <title>野村ベンチマーク抽出 & 営業インテリジェンス</title>
+    <meta name="description" content="野村アセットマネジメントの公募ファンドからベンチマーク指数を自動抽出・分析・手動レビューするエンタープライズWebアプリ">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
@@ -13,216 +13,697 @@
     <div class="app-container">
 
         <!-- ── Header ─────────────────────────────────────── -->
-        <header class="app-header fade-in">
-            <h1>📊 野村ベンチマーク抽出ツール</h1>
-            <p class="subtitle">Nomura Fund Benchmark Extractor — 交付目論見書PDFからベンチマーク指数を自動抽出</p>
+        <header class="app-header">
+            <div class="header-badge">ENTERPRISE EDITION</div>
+            <h1>📊 野村ベンチマーク抽出 & 営業インテリジェンス</h1>
+            <p class="subtitle">交付目論見書PDFからのマルチLLMベンチマーク自動抽出・MSCIシェア分析・インタラクティブレビュー基盤</p>
         </header>
 
-        <!-- ── Controls ────────────────────────────────────── -->
-        <section class="card fade-in" id="controlCard">
-            <div class="card-title"><span class="icon">⚙️</span> 実行設定</div>
-            <div class="controls-grid">
-                <div class="control-group">
-                    <label>取得ファンド数</label>
-                    <div class="range-value" id="fundCountDisplay">100</div>
-                    <input type="range" id="maxFunds" min="5" max="200" step="5" value="100">
-                    <div class="range-display"><span>5</span><span>200</span></div>
+        <!-- ── Navigation Tabs ────────────────────────────── -->
+        <nav class="nav-tabs">
+            <button class="nav-tab active" data-tab="analytics" onclick="switchTab('analytics')">
+                <span class="icon">📈</span> マーケット & MSCI営業分析
+            </button>
+            <button class="nav-tab" data-tab="results" onclick="switchTab('results')">
+                <span class="icon">📋</span> ファンド一覧 & レビュー
+            </button>
+            <button class="nav-tab" data-tab="pipeline" onclick="switchTab('pipeline')">
+                <span class="icon">🚀</span> パイプライン実行 & LLM設定
+            </button>
+        </nav>
+
+        <!-- ═════════════════════════════════════════════════════
+             TAB 1: ANALYTICS & MARKET SHARE
+        ═════════════════════════════════════════════════════ -->
+        <section class="tab-content active" id="tabAnalytics">
+            <!-- KPI Summary Cards -->
+            <div class="kpi-grid">
+                <div class="kpi-card accent">
+                    <div class="kpi-title">総ファンド数 (取得対象)</div>
+                    <div class="kpi-value" id="kpiTotalFunds">0</div>
+                    <div class="kpi-sub" id="kpiTotalAum">AUM: —</div>
                 </div>
-                <div class="control-group">
-                    <div class="toggle-row">
-                        <label class="toggle">
-                            <input type="checkbox" id="useLLM" checked>
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <span class="toggle-label">LLM抽出 (Claude Sonnet 5)</span>
+                <div class="kpi-card success">
+                    <div class="kpi-title">MSCI 採用ファンド数</div>
+                    <div class="kpi-value" id="kpiMsciCount">0</div>
+                    <div class="kpi-sub" id="kpiMsciCountShare">シェア: —%</div>
+                </div>
+                <div class="kpi-card emerald">
+                    <div class="kpi-title">MSCI 採用 AUM</div>
+                    <div class="kpi-value" id="kpiMsciAum">0億円</div>
+                    <div class="kpi-sub" id="kpiMsciAumShare">AUMシェア: —%</div>
+                </div>
+                <div class="kpi-card warning">
+                    <div class="kpi-title">要確認 (レビュー待ち)</div>
+                    <div class="kpi-value" id="kpiReviewCount">0</div>
+                    <div class="kpi-sub">確度要確認または未確定</div>
+                </div>
+            </div>
+
+            <!-- Two Columns: Provider Breakdown & Sales Targets -->
+            <div class="analytics-layout">
+                <!-- Left: Provider Market Share -->
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">🏛️</span> 指数提供者別 AUMシェア
                     </div>
-                    <div class="toggle-row">
-                        <label class="toggle">
-                            <input type="checkbox" id="forceRerun">
-                            <span class="toggle-slider"></span>
-                        </label>
-                        <span class="toggle-label">キャッシュ無視で再実行</span>
+                    <div class="provider-bars" id="providerBarsContainer">
+                        <div class="loading-placeholder">データを読み込み中...</div>
                     </div>
                 </div>
-                <div class="control-group">
-                    <div class="btn-actions">
+
+                <!-- Right: Top Non-MSCI Opportunities -->
+                <div class="card">
+                    <div class="card-title">
+                        <span class="icon">🎯</span> MSCI営業アプローチ優先ターゲット (高AUM非MSCI)
+                    </div>
+                    <div class="target-list" id="targetListContainer">
+                        <div class="loading-placeholder">データを読み込み中...</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═════════════════════════════════════════════════════
+             TAB 2: FUND LIST & INTERACTIVE REVIEW
+        ═════════════════════════════════════════════════════ -->
+        <section class="tab-content" id="tabResults">
+            <div class="card">
+                <div class="results-header">
+                    <div class="filter-group">
+                        <input type="text" class="search-input" id="searchInput" placeholder="🔍 ファンド名・コード・ベンチマークで絞り込み..." oninput="applyFilters()">
+                        <select class="select-input" id="filterProvider" onchange="applyFilters()">
+                            <option value="">全指数提供者</option>
+                            <option value="MSCI">MSCI</option>
+                            <option value="JPX/東証">JPX/東証</option>
+                            <option value="日本経済新聞社">日本経済新聞社</option>
+                            <option value="S&P DJI">S&P DJI</option>
+                            <option value="FTSE Russell">FTSE Russell</option>
+                            <option value="Nasdaq">Nasdaq</option>
+                            <option value="ブルームバーグ">ブルームバーグ</option>
+                            <option value="野村">野村</option>
+                            <option value="複合">複合</option>
+                            <option value="なし">なし</option>
+                        </select>
+                        <select class="select-input" id="filterReview" onchange="applyFilters()">
+                            <option value="">ステータス: 全て</option>
+                            <option value="review">要確認のみ</option>
+                            <option value="ok">確認済み (OK)</option>
+                            <option value="manual">手動編集済み</option>
+                        </select>
+                    </div>
+
+                    <div class="export-actions">
+                        <a class="btn btn-download" href="/api/download/xlsx" download>📊 Excel (多機能分析)</a>
+                        <a class="btn btn-download" href="/api/download/csv" download>📄 CSV</a>
+                    </div>
+                </div>
+
+                <!-- Quick Filter Pills -->
+                <div class="quick-pills">
+                    <button class="pill-btn active" onclick="setQuickFilter('all')">全て</button>
+                    <button class="pill-btn" onclick="setQuickFilter('review')">⚠️ 要確認のみ</button>
+                    <button class="pill-btn" onclick="setQuickFilter('msci')">🟢 MSCI採用のみ</button>
+                    <button class="pill-btn" onclick="setQuickFilter('non-msci')">🎯 営業対象 (非MSCI)</button>
+                </div>
+
+                <!-- Table -->
+                <div class="table-wrapper">
+                    <table class="results-table" id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th onclick="sortTable('rank')">順位 ↕</th>
+                                <th onclick="sortTable('fund_name')">ファンド名 ↕</th>
+                                <th onclick="sortTable('fund_code')">コード ↕</th>
+                                <th onclick="sortTable('aum')">AUM (億円) ↕</th>
+                                <th onclick="sortTable('fund_type')">種別 ↕</th>
+                                <th onclick="sortTable('benchmark')">ベンチマーク ↕</th>
+                                <th onclick="sortTable('index_provider')">指数提供者 ↕</th>
+                                <th onclick="sortTable('is_msci')">MSCI ↕</th>
+                                <th onclick="sortTable('confidence')">信頼度 ↕</th>
+                                <th onclick="sortTable('needs_review')">確認 ↕</th>
+                                <th>アクション</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ═════════════════════════════════════════════════════
+             TAB 3: PIPELINE EXECUTION & LLM SETTINGS
+        ═════════════════════════════════════════════════════ -->
+        <section class="tab-content" id="tabPipeline">
+            <div class="card">
+                <div class="card-title"><span class="icon">⚙️</span> パイプライン実行設定</div>
+                <div class="controls-grid">
+                    <!-- LLM Provider selection -->
+                    <div class="control-group">
+                        <label>🤖 LLMプロバイダー選択</label>
+                        <select class="select-input" id="llmProvider">
+                            <option value="auto">自動選択 (利用可能キー優先)</option>
+                            <option value="anthropic">Anthropic Claude (Sonnet 3.5 / 3.7)</option>
+                            <option value="gemini">Google Gemini (Gemini 2.0 Flash / Pro)</option>
+                            <option value="openai">OpenAI (GPT-4o / GPT-4o-mini)</option>
+                            <option value="ollama">Ollama (ローカルLLM)</option>
+                        </select>
+                        <div class="helper-text" id="llmStatusInfo">設定済みプロバイダーを確認中...</div>
+                    </div>
+
+                    <!-- Fund Count -->
+                    <div class="control-group">
+                        <label>📊 取得ファンド数 (AUM上位)</label>
+                        <div class="range-value" id="fundCountDisplay">100</div>
+                        <input type="range" id="maxFunds" min="5" max="200" step="5" value="100">
+                        <div class="range-display"><span>5</span><span>200</span></div>
+                    </div>
+
+                    <!-- Concurrency & Toggles -->
+                    <div class="control-group">
+                        <div class="toggle-row">
+                            <label class="toggle">
+                                <input type="checkbox" id="useLLM" checked>
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-label">LLM抽出を有効化</span>
+                        </div>
+                        <div class="toggle-row">
+                            <label class="toggle">
+                                <input type="checkbox" id="forceRerun">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <span class="toggle-label">キャッシュ無視で全再取得</span>
+                        </div>
+                        <div class="worker-row">
+                            <label>並行ワーカ数: <b id="workerCountDisplay">5</b></label>
+                            <input type="range" id="workerCount" min="1" max="10" step="1" value="5">
+                        </div>
+                    </div>
+
+                    <div class="control-group action-group">
                         <button class="btn btn-primary" id="btnStart" onclick="startPipeline()">
-                            🚀 実行開始
+                            🚀 パイプライン実行開始
                         </button>
                         <button class="btn btn-danger" id="btnCancel" onclick="cancelPipeline()" style="display:none">
-                            ✖ キャンセル
+                            ✖ 中断 / キャンセル
                         </button>
                     </div>
                 </div>
             </div>
-        </section>
 
-        <!-- ── Stage Progress ──────────────────────────────── -->
-        <section class="card fade-in" id="progressCard" style="display:none">
-            <div class="card-title"><span class="icon">📡</span> パイプライン進捗</div>
-            <div class="stage-progress" id="stageProgress">
-                <div class="stage-step" data-stage="1">
-                    <div class="stage-dot">1</div>
-                    <span class="stage-label">一覧取得</span>
+            <!-- Stage Progress & Live Logs -->
+            <div class="card" id="progressCard" style="display:none">
+                <div class="card-title"><span class="icon">📡</span> パイプライン進捗</div>
+                <div class="stage-progress" id="stageProgress">
+                    <div class="stage-step" data-stage="1">
+                        <div class="stage-dot">1</div>
+                        <span class="stage-label">一覧取得</span>
+                    </div>
+                    <div class="stage-connector" data-after="1"></div>
+                    <div class="stage-step" data-stage="2">
+                        <div class="stage-dot">2</div>
+                        <span class="stage-label">PDF URL</span>
+                    </div>
+                    <div class="stage-connector" data-after="2"></div>
+                    <div class="stage-step" data-stage="3">
+                        <div class="stage-dot">3</div>
+                        <span class="stage-label">DL (並行)</span>
+                    </div>
+                    <div class="stage-connector" data-after="3"></div>
+                    <div class="stage-step" data-stage="4">
+                        <div class="stage-dot">4</div>
+                        <span class="stage-label">テキスト抽出</span>
+                    </div>
+                    <div class="stage-connector" data-after="4"></div>
+                    <div class="stage-step" data-stage="5">
+                        <div class="stage-dot">5</div>
+                        <span class="stage-label">BM抽出</span>
+                    </div>
+                    <div class="stage-connector" data-after="5"></div>
+                    <div class="stage-step" data-stage="6">
+                        <div class="stage-dot">6</div>
+                        <span class="stage-label">出力</span>
+                    </div>
                 </div>
-                <div class="stage-connector" data-after="1"></div>
-                <div class="stage-step" data-stage="2">
-                    <div class="stage-dot">2</div>
-                    <span class="stage-label">PDF URL</span>
-                </div>
-                <div class="stage-connector" data-after="2"></div>
-                <div class="stage-step" data-stage="3">
-                    <div class="stage-dot">3</div>
-                    <span class="stage-label">DL</span>
-                </div>
-                <div class="stage-connector" data-after="3"></div>
-                <div class="stage-step" data-stage="4">
-                    <div class="stage-dot">4</div>
-                    <span class="stage-label">テキスト</span>
-                </div>
-                <div class="stage-connector" data-after="4"></div>
-                <div class="stage-step" data-stage="5">
-                    <div class="stage-dot">5</div>
-                    <span class="stage-label">BM抽出</span>
-                </div>
-                <div class="stage-connector" data-after="5"></div>
-                <div class="stage-step" data-stage="6">
-                    <div class="stage-dot">6</div>
-                    <span class="stage-label">出力</span>
-                </div>
-            </div>
 
-            <!-- Log Console -->
-            <div class="card-title" style="margin-top: var(--space-md)"><span class="icon">🖥️</span> ログ</div>
-            <div class="log-console" id="logConsole">
-                <div class="log-line">パイプライン開始待ち...</div>
-            </div>
-        </section>
-
-        <!-- ── Results ─────────────────────────────────────── -->
-        <section class="card fade-in" id="resultsCard" style="display:none">
-            <div class="card-title"><span class="icon">📋</span> 抽出結果</div>
-
-            <!-- Stats -->
-            <div class="stats-row" id="statsRow">
-                <div class="stat-item">
-                    <div class="stat-value accent" id="statTotal">0</div>
-                    <div class="stat-label">ファンド総数</div>
+                <div class="card-title" style="margin-top: var(--space-lg)"><span class="icon">🖥️</span> 実行ログ</div>
+                <div class="log-console" id="logConsole">
+                    <div class="log-line">パイプライン待機中...</div>
                 </div>
-                <div class="stat-item">
-                    <div class="stat-value success" id="statExtracted">0</div>
-                    <div class="stat-label">BM抽出成功</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value warning" id="statReview">0</div>
-                    <div class="stat-label">要確認</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="statMSCI">0</div>
-                    <div class="stat-label">MSCI関連</div>
-                </div>
-            </div>
-
-            <!-- Downloads -->
-            <div class="btn-actions" style="margin-bottom: var(--space-md)">
-                <a class="btn btn-download" href="/api/download/csv" download>📄 CSVダウンロード</a>
-                <a class="btn btn-download" href="/api/download/xlsx" download>📊 Excelダウンロード</a>
-            </div>
-
-            <!-- Search -->
-            <div class="search-bar">
-                <input type="text" class="search-input" id="searchInput" placeholder="🔍 ファンド名・ベンチマークで検索..."
-                    oninput="filterTable()">
-            </div>
-
-            <!-- Table -->
-            <div class="table-wrapper">
-                <table class="results-table" id="resultsTable">
-                    <thead>
-                        <tr>
-                            <th onclick="sortTable(0)">順位</th>
-                            <th onclick="sortTable(1)">ファンド名</th>
-                            <th onclick="sortTable(2)">ファンドコード</th>
-                            <th onclick="sortTable(3)">AUM (億円)</th>
-                            <th onclick="sortTable(4)">ファンド種別</th>
-                            <th onclick="sortTable(5)">ベンチマーク</th>
-                            <th onclick="sortTable(6)">指数提供者</th>
-                            <th onclick="sortTable(7)">信頼度</th>
-                            <th onclick="sortTable(8)">抽出方法</th>
-                            <th onclick="sortTable(9)">要確認</th>
-                        </tr>
-                    </thead>
-                    <tbody id="resultsBody"></tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- ── Empty State ─────────────────────────────────── -->
-        <section class="card fade-in" id="emptyState">
-            <div class="empty-state">
-                <div class="icon">📂</div>
-                <p>「実行開始」をクリックしてベンチマーク抽出を開始してください</p>
             </div>
         </section>
 
     </div>
 
+    <!-- ═════════════════════════════════════════════════════
+         MODAL / DRAWER: FUND DETAIL & MANUAL REVIEW
+    ═════════════════════════════════════════════════════ -->
+    <div class="modal-overlay" id="fundModal" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="modalFundName">ファンド詳細</h2>
+                    <div class="modal-subtitle" id="modalFundCode">コード: —</div>
+                </div>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- Left: Form Editor -->
+                <div class="modal-form">
+                    <h3 class="section-heading">✏️ ベンチマーク手動編集・確認</h3>
+                    <div class="form-group">
+                        <label>ベンチマーク指数名</label>
+                        <input type="text" class="input-field" id="editBenchmark" placeholder="例: MSCI-KOKUSAI指数（配当込み）">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>指数提供者</label>
+                            <select class="select-input" id="editProvider">
+                                <option value="MSCI">MSCI</option>
+                                <option value="JPX/東証">JPX/東証</option>
+                                <option value="JPX/日経">JPX/日経</option>
+                                <option value="日本経済新聞社">日本経済新聞社</option>
+                                <option value="野村">野村</option>
+                                <option value="FTSE Russell">FTSE Russell</option>
+                                <option value="S&P DJI">S&P DJI</option>
+                                <option value="Nasdaq">Nasdaq</option>
+                                <option value="ブルームバーグ">ブルームバーグ</option>
+                                <option value="ICE Data Indices">ICE Data Indices</option>
+                                <option value="Solactive">Solactive</option>
+                                <option value="Morningstar">Morningstar</option>
+                                <option value="STOXX">STOXX</option>
+                                <option value="Hang Seng / CSI">Hang Seng / CSI</option>
+                                <option value="複合">複合</option>
+                                <option value="なし">なし</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>ファンド種別</label>
+                            <select class="select-input" id="editFundType">
+                                <option value="インデックス">インデックス</option>
+                                <option value="アクティブ">アクティブ</option>
+                                <option value="アクティブ（BMなし）">アクティブ（BMなし）</option>
+                                <option value="バランス（複合BM）">バランス（複合BM）</option>
+                                <option value="不明">不明</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="editNeedsReview">
+                            <span>要確認フラグを解除（確認完了にする）</span>
+                        </label>
+                    </div>
+
+                    <div class="form-group">
+                        <label>レビューメモ / 修正理由</label>
+                        <textarea class="textarea-field" id="editComment" rows="2" placeholder="修正理由や特記事項を入力..."></textarea>
+                    </div>
+
+                    <div class="modal-actions">
+                        <button class="btn btn-success" onclick="saveFundEdit()">💾 変更を保存</button>
+                        <button class="btn btn-secondary" onclick="reextractCurrentFund(false)">🔄 再抽出 (通常)</button>
+                        <button class="btn btn-warning" onclick="reextractCurrentFund(true)">🔍 強制OCR再抽出</button>
+                    </div>
+                </div>
+
+                <!-- Right: Text & PDF Inspector -->
+                <div class="modal-inspector">
+                    <div class="inspector-header">
+                        <h3 class="section-heading">📄 交付目論見書テキスト</h3>
+                        <a id="modalPdfLink" href="#" target="_blank" class="btn btn-sm btn-info">PDFを開く ↗</a>
+                    </div>
+                    <div class="inspector-box" id="modalExtractedText">
+                        読み込み中...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═════════════════════════════════════════════════════
+         FRONTEND JAVASCRIPT
+    ═════════════════════════════════════════════════════ -->
     <script>
-        // ── State ──────────────────────────────────
-        let eventSource = null;
+        // State
         let allResults = [];
-        let sortCol = -1;
+        let filteredResults = [];
+        let currentFundCode = null;
+        let eventSource = null;
+        let sortKey = 'rank';
         let sortAsc = true;
+        let quickFilter = 'all';
 
-        // ── Range slider ──────────────────────────
-        const slider = document.getElementById('maxFunds');
-        const display = document.getElementById('fundCountDisplay');
-        slider.addEventListener('input', () => { display.textContent = slider.value; });
+        // Range Sliders
+        const maxFundsSlider = document.getElementById('maxFunds');
+        const maxFundsDisplay = document.getElementById('fundCountDisplay');
+        maxFundsSlider.addEventListener('input', () => { maxFundsDisplay.textContent = maxFundsSlider.value; });
 
-        // ── Start Pipeline ────────────────────────
+        const workerSlider = document.getElementById('workerCount');
+        const workerDisplay = document.getElementById('workerCountDisplay');
+        workerSlider.addEventListener('input', () => { workerDisplay.textContent = workerSlider.value; });
+
+        // Tab Switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.nav-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tabId));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab' + tabId.charAt(0).toUpperCase() + tabId.slice(1)));
+            if (tabId === 'analytics') loadAnalytics();
+            if (tabId === 'results') applyFilters();
+        }
+
+        // Check LLM Provider status
+        async function checkProviders() {
+            try {
+                const resp = await fetch('/api/llm/providers');
+                const data = await resp.json();
+                const info = document.getElementById('llmStatusInfo');
+                const configured = (data.providers || []).filter(p => p.configured).map(p => p.name);
+                if (configured.length > 0) {
+                    info.innerHTML = `✅ 利用可能: <b>${configured.join(', ')}</b>`;
+                } else {
+                    info.innerHTML = `⚠️ APIキー未設定 (ルールベースで動作します)`;
+                }
+            } catch (e) { }
+        }
+
+        // Fetch Analytics
+        async function loadAnalytics() {
+            try {
+                const resp = await fetch('/api/analytics');
+                const data = await resp.json();
+                if (data.empty) return;
+
+                document.getElementById('kpiTotalFunds').textContent = data.total_funds;
+                document.getElementById('kpiTotalAum').textContent = `AUM合計: ${(data.total_aum / 1e12).toFixed(2)} 兆円`;
+                document.getElementById('kpiMsciCount').textContent = data.msci_count;
+                document.getElementById('kpiMsciCountShare').textContent = `件数シェア: ${data.msci_count_share.toFixed(1)}%`;
+                document.getElementById('kpiMsciAum').textContent = `${(data.msci_aum / 1e12).toFixed(2)} 兆円`;
+                document.getElementById('kpiMsciAumShare').textContent = `AUMシェア: ${data.msci_aum_share.toFixed(1)}%`;
+                
+                const reviewCount = allResults.filter(r => r.needs_review).length;
+                document.getElementById('kpiReviewCount').textContent = reviewCount;
+
+                // Provider Bars
+                const container = document.getElementById('providerBarsContainer');
+                container.innerHTML = '';
+                const maxAum = Math.max(...data.providers.map(p => p.aum), 1);
+
+                data.providers.forEach(p => {
+                    const pct = ((p.aum / data.total_aum) * 100).toFixed(1);
+                    const barWidth = Math.max((p.aum / maxAum) * 100, 2);
+                    const isMsci = p.is_msci;
+                    const oku = (p.aum / 1e8).toLocaleString('ja-JP', { maximumFractionDigits: 0 });
+
+                    const item = document.createElement('div');
+                    item.className = 'provider-bar-item';
+                    item.innerHTML = `
+                        <div class="provider-bar-label">
+                            <span class="name ${isMsci ? 'msci-highlight' : ''}">${escapeHtml(p.name)} ${isMsci ? '⭐' : ''}</span>
+                            <span class="val">${oku}億円 (${pct}%) · ${p.count}本</span>
+                        </div>
+                        <div class="progress-track">
+                            <div class="progress-fill ${isMsci ? 'msci-fill' : ''}" style="width: ${barWidth}%"></div>
+                        </div>
+                    `;
+                    container.appendChild(item);
+                });
+
+                // Top Targets
+                const targetContainer = document.getElementById('targetListContainer');
+                targetContainer.innerHTML = '';
+                (data.top_targets || []).forEach(t => {
+                    const item = document.createElement('div');
+                    item.className = 'target-item';
+                    item.innerHTML = `
+                        <div class="target-main">
+                            <div class="target-rank">#${t.rank}</div>
+                            <div class="target-details">
+                                <div class="target-name">${escapeHtml(t.fund_name)}</div>
+                                <div class="target-sub">現指数: <b>${escapeHtml(t.benchmark || '—')}</b> (${escapeHtml(t.index_provider)})</div>
+                            </div>
+                        </div>
+                        <div class="target-aum">${(t.aum / 1e8).toLocaleString('ja-JP', { maximumFractionDigits: 0 })}億円</div>
+                    `;
+                    targetContainer.appendChild(item);
+                });
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        // Fetch Results
+        async function fetchResults() {
+            try {
+                const resp = await fetch('/api/results');
+                const data = await resp.json();
+                allResults = data.results || [];
+                applyFilters();
+                loadAnalytics();
+            } catch (e) { }
+        }
+
+        // Filter and Render Table
+        function setQuickFilter(mode) {
+            quickFilter = mode;
+            document.querySelectorAll('.pill-btn').forEach(b => b.classList.toggle('active', b.textContent.includes(mode) || (mode === 'all' && b.textContent === '全て')));
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const query = (document.getElementById('searchInput').value || '').toLowerCase();
+            const providerFilter = document.getElementById('filterProvider').value;
+            const reviewFilter = document.getElementById('filterReview').value;
+
+            filteredResults = allResults.filter(r => {
+                // Search query
+                const matchesSearch = !query ||
+                    (r.fund_name || '').toLowerCase().includes(query) ||
+                    (r.fund_code || '').toLowerCase().includes(query) ||
+                    (r.benchmark || '').toLowerCase().includes(query);
+
+                // Provider
+                const matchesProvider = !providerFilter || r.index_provider === providerFilter;
+
+                // Review Status
+                let matchesReview = true;
+                if (reviewFilter === 'review') matchesReview = Boolean(r.needs_review);
+                if (reviewFilter === 'ok') matchesReview = !r.needs_review;
+                if (reviewFilter === 'manual') matchesReview = Boolean(r.manual_override);
+
+                // Quick Pills
+                let matchesQuick = true;
+                if (quickFilter === 'review') matchesQuick = Boolean(r.needs_review);
+                if (quickFilter === 'msci') matchesQuick = Boolean(r.is_msci);
+                if (quickFilter === 'non-msci') matchesQuick = !r.is_msci && (r.aum > 0);
+
+                return matchesSearch && matchesProvider && matchesReview && matchesQuick;
+            });
+
+            // Sort
+            filteredResults.sort((a, b) => {
+                let va = a[sortKey], vb = b[sortKey];
+                if (va == null) va = '';
+                if (vb == null) vb = '';
+                if (typeof va === 'number' && typeof vb === 'number') {
+                    return sortAsc ? va - vb : vb - va;
+                }
+                return sortAsc ? String(va).localeCompare(String(vb), 'ja') : String(vb).localeCompare(String(va), 'ja');
+            });
+
+            renderTable(filteredResults);
+        }
+
+        function sortTable(key) {
+            if (sortKey === key) {
+                sortAsc = !sortAsc;
+            } else {
+                sortKey = key;
+                sortAsc = true;
+            }
+            applyFilters();
+        }
+
+        function renderTable(results) {
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = '';
+
+            if (results.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; padding: 2rem; color: #64748b;">一致するファンドがありません</td></tr>`;
+                return;
+            }
+
+            results.forEach(r => {
+                const tr = document.createElement('tr');
+                const oku = r.aum ? (r.aum / 1e8).toLocaleString('ja-JP', { maximumFractionDigits: 0 }) : '—';
+                
+                tr.innerHTML = `
+                    <td style="text-align:center">${r.rank}</td>
+                    <td style="max-width:240px">
+                        <b>${escapeHtml(r.fund_name)}</b>
+                        ${r.manual_override ? '<span class="tag-manual">手動編集</span>' : ''}
+                    </td>
+                    <td><code>${r.fund_code}</code></td>
+                    <td style="text-align:right"><b>${oku}</b></td>
+                    <td>${fundTypeBadge(r.fund_type)}</td>
+                    <td style="max-width:220px">${escapeHtml(r.benchmark || '—')}</td>
+                    <td>${escapeHtml(r.index_provider)}</td>
+                    <td style="text-align:center">${r.is_msci ? '<span class="badge badge-success">MSCI</span>' : '<span class="badge badge-muted">他社</span>'}</td>
+                    <td>${confidenceBadge(r.confidence)}</td>
+                    <td style="text-align:center">${r.needs_review ? '<span class="badge badge-warning">要確認</span>' : '<span class="badge badge-success">OK</span>'}</td>
+                    <td style="text-align:center">
+                        <button class="btn btn-sm btn-primary" onclick="openFundModal('${r.fund_code}')">✏️ レビュー</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Modal Handlers
+        async function openFundModal(fundCode) {
+            currentFundCode = fundCode;
+            const modal = document.getElementById('fundModal');
+            modal.style.display = 'flex';
+
+            try {
+                const resp = await fetch(`/api/funds/${fundCode}/detail`);
+                const data = await resp.json();
+                const rec = data.record;
+
+                document.getElementById('modalFundName').textContent = rec.fund_name;
+                document.getElementById('modalFundCode').textContent = `コード: ${rec.fund_code} | AUM: ${(rec.aum / 1e8).toLocaleString('ja-JP', { maximumFractionDigits: 0 })}億円`;
+                
+                document.getElementById('editBenchmark').value = rec.benchmark || '';
+                document.getElementById('editProvider').value = rec.index_provider || 'なし';
+                document.getElementById('editFundType').value = rec.fund_type || 'インデックス';
+                document.getElementById('editNeedsReview').checked = !rec.needs_review;
+                document.getElementById('editComment').value = rec.review_comment || '';
+
+                const pdfLink = document.getElementById('modalPdfLink');
+                if (rec.prospectus_pdf_url) {
+                    pdfLink.href = rec.prospectus_pdf_url;
+                    pdfLink.style.display = 'inline-block';
+                } else {
+                    pdfLink.style.display = 'none';
+                }
+
+                document.getElementById('modalExtractedText').textContent = data.extracted_text || '目論見書テキスト未取得';
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function closeModal(event) {
+            if (!event || event.target.id === 'fundModal') {
+                document.getElementById('fundModal').style.display = 'none';
+                currentFundCode = null;
+            }
+        }
+
+        async function saveFundEdit() {
+            if (!currentFundCode) return;
+            const benchmark = document.getElementById('editBenchmark').value;
+            const index_provider = document.getElementById('editProvider').value;
+            const fund_type = document.getElementById('editFundType').value;
+            const confirmedOk = document.getElementById('editNeedsReview').checked;
+            const comment = document.getElementById('editComment').value;
+
+            try {
+                const resp = await fetch(`/api/funds/${currentFundCode}/edit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        benchmark,
+                        index_provider,
+                        fund_type,
+                        needs_review: !confirmedOk,
+                        comment,
+                        reviewer: 'Web Analyst',
+                    }),
+                });
+                if (resp.ok) {
+                    closeModal();
+                    await fetchResults();
+                } else {
+                    alert('保存に失敗しました');
+                }
+            } catch (e) {
+                alert('エラー: ' + e.message);
+            }
+        }
+
+        async function reextractCurrentFund(forceOcr) {
+            if (!currentFundCode) return;
+            const useLLM = document.getElementById('useLLM').checked;
+            const provider = document.getElementById('llmProvider').value;
+
+            try {
+                const resp = await fetch(`/api/funds/${currentFundCode}/reextract`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        use_llm: useLLM,
+                        provider: provider === 'auto' ? null : provider,
+                        force_ocr: forceOcr,
+                    }),
+                });
+                if (resp.ok) {
+                    await openFundModal(currentFundCode);
+                    await fetchResults();
+                } else {
+                    alert('再抽出に失敗しました');
+                }
+            } catch (e) {
+                alert('エラー: ' + e.message);
+            }
+        }
+
+        // Pipeline Execution
         async function startPipeline() {
-            const maxFunds = parseInt(slider.value);
+            const maxFunds = parseInt(maxFundsSlider.value);
             const useLLM = document.getElementById('useLLM').checked;
             const force = document.getElementById('forceRerun').checked;
+            const provider = document.getElementById('llmProvider').value;
+            const workers = parseInt(workerSlider.value);
 
             document.getElementById('btnStart').disabled = true;
             document.getElementById('btnStart').innerHTML = '<span class="spinner"></span> 実行中...';
             document.getElementById('btnCancel').style.display = 'inline-flex';
             document.getElementById('progressCard').style.display = 'block';
-            document.getElementById('emptyState').style.display = 'none';
             document.getElementById('logConsole').innerHTML = '';
 
-            // Reset stages
-            document.querySelectorAll('.stage-step').forEach(el => {
-                el.classList.remove('active', 'done');
-            });
-            document.querySelectorAll('.stage-connector').forEach(el => {
-                el.classList.remove('done');
-            });
+            document.querySelectorAll('.stage-step').forEach(el => el.classList.remove('active', 'done'));
+            document.querySelectorAll('.stage-connector').forEach(el => el.classList.remove('done'));
 
             try {
                 const resp = await fetch('/api/run', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ max_funds: maxFunds, use_llm: useLLM, force }),
+                    body: JSON.stringify({
+                        max_funds: maxFunds,
+                        use_llm: useLLM,
+                        force: force,
+                        provider: provider === 'auto' ? null : provider,
+                        workers: workers,
+                    }),
                 });
                 if (!resp.ok) {
                     const err = await resp.json();
-                    addLog('ERROR', err.error || 'Failed to start');
+                    addLog('ERROR', err.error || '実行開始に失敗しました');
                     resetButtons();
                     return;
                 }
             } catch (e) {
-                addLog('ERROR', 'Connection error: ' + e.message);
+                addLog('ERROR', '接続エラー: ' + e.message);
                 resetButtons();
                 return;
             }
 
-            // Connect SSE
             connectSSE();
         }
 
-        // ── SSE Connection ────────────────────────
         function connectSSE() {
             if (eventSource) eventSource.close();
             eventSource = new EventSource('/api/status');
@@ -259,13 +740,8 @@
                 addLog('WARNING', '⏹ キャンセルされました');
                 resetButtons();
             });
-
-            eventSource.onerror = () => {
-                // Reconnect silently on stream errors
-            };
         }
 
-        // ── Update stage progress ─────────────────
         function updateStage(stageNum) {
             document.querySelectorAll('.stage-step').forEach(el => {
                 const s = parseInt(el.dataset.stage);
@@ -279,7 +755,6 @@
             });
         }
 
-        // ── Add log line ──────────────────────────
         function addLog(level, message) {
             const console = document.getElementById('logConsole');
             const line = document.createElement('div');
@@ -287,82 +762,20 @@
             line.textContent = message;
             console.appendChild(line);
             console.scrollTop = console.scrollHeight;
-
-            // Keep last 300 lines
-            while (console.children.length > 300) {
-                console.removeChild(console.firstChild);
-            }
         }
 
-        // ── Cancel Pipeline ───────────────────────
         async function cancelPipeline() {
             await fetch('/api/cancel', { method: 'POST' });
         }
 
-        // ── Reset buttons ─────────────────────────
         function resetButtons() {
             const btn = document.getElementById('btnStart');
             btn.disabled = false;
-            btn.innerHTML = '🚀 実行開始';
+            btn.innerHTML = '🚀 パイプライン実行開始';
             document.getElementById('btnCancel').style.display = 'none';
-
-            // Mark all active stages as done
-            document.querySelectorAll('.stage-step.active').forEach(el => {
-                el.classList.remove('active');
-                el.classList.add('done');
-            });
         }
 
-        // ── Fetch and display results ─────────────
-        async function fetchResults() {
-            try {
-                const resp = await fetch('/api/results');
-                const data = await resp.json();
-                allResults = data.results || [];
-                renderResults(allResults);
-                document.getElementById('resultsCard').style.display = 'block';
-            } catch (e) {
-                addLog('ERROR', 'Failed to fetch results');
-            }
-        }
-
-        // ── Render results table ──────────────────
-        function renderResults(results) {
-            // Stats
-            document.getElementById('statTotal').textContent = results.length;
-            document.getElementById('statExtracted').textContent =
-                results.filter(r => r.benchmark && r.benchmark !== 'なし').length;
-            document.getElementById('statReview').textContent =
-                results.filter(r => r.needs_review).length;
-            document.getElementById('statMSCI').textContent =
-                results.filter(r => r.is_msci).length;
-
-            // Table
-            const tbody = document.getElementById('resultsBody');
-            tbody.innerHTML = '';
-
-            results.forEach(r => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-          <td>${r.rank}</td>
-          <td style="max-width:260px">${escapeHtml(r.fund_name)}</td>
-          <td><code>${r.fund_code}</code></td>
-          <td style="text-align:right">${formatAum(r.aum)}</td>
-          <td>${fundTypeBadge(r.fund_type)}</td>
-          <td style="max-width:280px">${escapeHtml(r.benchmark || '—')}</td>
-          <td>${escapeHtml(r.index_provider)}</td>
-          <td>${confidenceBadge(r.confidence)}</td>
-          <td><span class="badge badge-info">${r.extraction_method}</span></td>
-          <td>${r.needs_review
-                        ? '<span class="badge badge-warning">要確認</span>'
-                        : '<span class="badge badge-success">OK</span>'
-                    }</td>
-        `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        // ── Helpers ────────────────────────────────
+        // Helpers
         function escapeHtml(text) {
             if (!text) return '';
             const d = document.createElement('div');
@@ -370,87 +783,27 @@
             return d.innerHTML;
         }
 
-        function formatAum(aum) {
-            if (!aum) return '—';
-            return (aum / 1e8).toLocaleString('ja-JP', { maximumFractionDigits: 0 });
-        }
-
         function confidenceBadge(conf) {
-            const map = {
-                high: ['badge-success', 'HIGH'],
-                medium: ['badge-warning', 'MED'],
-                low: ['badge-error', 'LOW'],
-            };
-            const [cls, label] = map[conf] || ['badge-info', conf];
+            const map = { high: ['badge-success', 'HIGH'], medium: ['badge-warning', 'MED'], low: ['badge-error', 'LOW'] };
+            const [cls, label] = map[conf] || ['badge-info', conf || '—'];
             return `<span class="badge ${cls}">${label}</span>`;
         }
 
         function fundTypeBadge(type) {
-            if (!type) return '—';
             const colors = {
                 'インデックス': 'badge-info',
                 'アクティブ': 'badge-success',
                 'アクティブ（BMなし）': 'badge-warning',
-                'バランス（複合BM）': 'badge-info',
+                'バランス（複合BM）': 'badge-purple',
                 '不明': 'badge-error',
             };
-            return `<span class="badge ${colors[type] || 'badge-info'}">${escapeHtml(type)}</span>`;
+            return `<span class="badge ${colors[type] || 'badge-info'}">${escapeHtml(type || '—')}</span>`;
         }
 
-        // ── Filter / Sort ─────────────────────────
-        function filterTable() {
-            const query = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = allResults.filter(r =>
-                (r.fund_name || '').toLowerCase().includes(query) ||
-                (r.benchmark || '').toLowerCase().includes(query) ||
-                (r.fund_code || '').toLowerCase().includes(query)
-            );
-            renderResults(filtered);
-        }
-
-        function sortTable(colIndex) {
-            if (sortCol === colIndex) {
-                sortAsc = !sortAsc;
-            } else {
-                sortCol = colIndex;
-                sortAsc = true;
-            }
-
-            const keys = ['rank', 'fund_name', 'fund_code', 'aum', 'fund_type',
-                'benchmark', 'index_provider', 'confidence', 'extraction_method', 'needs_review'];
-            const key = keys[colIndex];
-
-            allResults.sort((a, b) => {
-                let va = a[key], vb = b[key];
-                if (va == null) va = '';
-                if (vb == null) vb = '';
-                if (typeof va === 'number' && typeof vb === 'number') {
-                    return sortAsc ? va - vb : vb - va;
-                }
-                return sortAsc
-                    ? String(va).localeCompare(String(vb), 'ja')
-                    : String(vb).localeCompare(String(va), 'ja');
-            });
-
-            renderResults(allResults);
-        }
-
-        // ── Check for existing results on load ────
+        // Initialization
         (async function init() {
-            try {
-                const resp = await fetch('/api/results');
-                const data = await resp.json();
-                if (data.results && data.results.length > 0) {
-                    allResults = data.results;
-                    renderResults(allResults);
-                    document.getElementById('resultsCard').style.display = 'block';
-                    document.getElementById('emptyState').style.display = 'none';
-                    // Show all stages as done
-                    document.getElementById('progressCard').style.display = 'block';
-                    document.querySelectorAll('.stage-step').forEach(el => el.classList.add('done'));
-                    document.querySelectorAll('.stage-connector').forEach(el => el.classList.add('done'));
-                }
-            } catch (e) { /* ignore */ }
+            await checkProviders();
+            await fetchResults();
         })();
     </script>
 </body>

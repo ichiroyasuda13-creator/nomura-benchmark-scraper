@@ -4,12 +4,23 @@ import json
 import re
 from typing import Any
 
+import httpx
 from loguru import logger
 from pydantic import ValidationError
 
-from app.config import ANTHROPIC_API_KEY, ANTHROPIC_MODEL
+from app.config import (
+    ANTHROPIC_API_KEY,
+    ANTHROPIC_MODEL,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    LLM_PROVIDER,
+    OLLAMA_BASE_URL,
+    OLLAMA_MODEL,
+    OPENAI_API_KEY,
+    OPENAI_BASE_URL,
+    OPENAI_MODEL,
+)
 from app.models import BenchmarkExtraction, Confidence, ExtractionMethod, FundType
-
 
 SYSTEM_PROMPT = """\
 あなたは日本の投資信託交付目論見書から、連動対象・基準指数を抽出するアシスタントです。
@@ -32,7 +43,7 @@ SYSTEM_PROMPT = """\
 - fund_type: インデックス / アクティブ / アクティブ（BMなし） / バランス（複合BM） / 不明
 - benchmark: 連動対象またはベンチマーク指数名。なければ null
 - benchmark_detail: 複合ベンチマークの構成(object)または null
-- index_provider: MSCI / JPX/東証 / JPX/日経 / 日本経済新聞社 / 野村 / FTSE Russell / S&P DJI / Nasdaq / 複合 / なし
+- index_provider: MSCI / JPX/東証 / JPX/日経 / 日本経済新聞社 / 野村 / FTSE Russell / S&P DJI / Nasdaq / ブルームバーグ / ICE / ソラクティブ / モーニングスター / STOXX / 複合 / なし
 - is_msci: boolean
 - reference_index: 参考指数。ベンチマークではない比較指数
 - confidence: high / medium / low
@@ -41,8 +52,67 @@ SYSTEM_PROMPT = """\
 """
 
 
-def llm_available() -> bool:
-    return bool(ANTHROPIC_API_KEY)
+def get_available_providers() -> list[dict[str, Any]]:
+    """Return a list of configured and available LLM providers with status."""
+    providers = []
+    if ANTHROPIC_API_KEY:
+        providers.append({
+            "id": "anthropic",
+            "name": "Anthropic Claude",
+            "model": ANTHROPIC_MODEL,
+            "configured": True,
+        })
+    if GEMINI_API_KEY:
+        providers.append({
+            "id": "gemini",
+            "name": "Google Gemini",
+            "model": GEMINI_MODEL,
+            "configured": True,
+        })
+    if OPENAI_API_KEY:
+        providers.append({
+            "id": "openai",
+            "name": "OpenAI",
+            "model": OPENAI_MODEL,
+            "configured": True,
+        })
+    # Ollama is local, always list as optional
+    providers.append({
+        "id": "ollama",
+        "name": "Ollama (Local LLM)",
+        "model": OLLAMA_MODEL,
+        "configured": bool(OLLAMA_BASE_URL),
+    })
+    return providers
+
+
+def llm_available(provider: str | None = None) -> bool:
+    """Check if any or a specific LLM provider is configured and available."""
+    target = (provider or LLM_PROVIDER or "auto").lower()
+    if target == "anthropic":
+        return bool(ANTHROPIC_API_KEY)
+    if target == "gemini":
+        return bool(GEMINI_API_KEY)
+    if target == "openai":
+        return bool(OPENAI_API_KEY)
+    if target == "ollama":
+        return bool(OLLAMA_BASE_URL)
+    # auto: check any key
+    return bool(ANTHROPIC_API_KEY or GEMINI_API_KEY or OPENAI_API_KEY)
+
+
+def resolve_active_provider(preferred: str | None = None) -> str | None:
+    """Determine the active LLM provider based on preferences and availability."""
+    target = (preferred or LLM_PROVIDER or "auto").lower()
+    if target != "auto" and llm_available(target):
+        return target
+    if ANTHROPIC_API_KEY:
+        return "anthropic"
+    if GEMINI_API_KEY:
+        return "gemini"
+    if OPENAI_API_KEY:
+        return "openai"
+    return None
 
 
 def _extract_json(text: str) -> dict[str, Any]:
@@ -50,7 +120,110 @@ def _extract_json(text: str) -> dict[str, Any]:
     if text.startswith("```"):
         text = re.sub(r"^```(?:json)?\s*", "", text)
         text = re.sub(r"\s*```$", "", text)
+    match = re.search(r"\{[\s\S]*\}", text)
+    if match:
+        text = match.group(0)
     return json.loads(text)
+
+
+def _call_anthropic(prompt: str, model: str) -> str:
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        message = client.messages.create(
+            model=model,
+            max_tokens=1200,
+            temperature=0,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return message.content[0].text
+    except ImportError:
+        # Fallback to direct HTTP
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "max_tokens": 1200,
+            "temperature": 0,
+            "system": SYSTEM_PROMPT,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.post(url, headers=headers, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+            return data["content"][0]["text"]
+
+
+def _call_openai(prompt: str, model: str) -> str:
+    url = f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0,
+        "response_format": {"type": "json_object"},
+    }
+    with httpx.Client(timeout=60.0) as client:
+        resp = client.post(url, headers=headers, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+
+
+def _call_gemini(prompt: str, model: str) -> str:
+    url = (
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        f"?key={GEMINI_API_KEY}"
+    )
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0,
+            "responseMimeType": "application/json",
+        },
+    }
+    with httpx.Client(timeout=60.0) as client:
+        resp = client.post(url, headers=headers, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        candidates = data.get("candidates", [])
+        if not candidates:
+            raise RuntimeError(f"Gemini API returned no candidates: {data}")
+        return candidates[0]["content"]["parts"][0]["text"]
+
+
+def _call_ollama(prompt: str, model: str) -> str:
+    url = f"{OLLAMA_BASE_URL.rstrip('/')}/api/chat"
+    headers = {"Content-Type": "application/json"}
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        "stream": False,
+        "format": "json",
+        "options": {"temperature": 0},
+    }
+    with httpx.Client(timeout=120.0) as client:
+        resp = client.post(url, headers=headers, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        return data["message"]["content"]
 
 
 def extract_with_llm(
@@ -58,18 +231,14 @@ def extract_with_llm(
     fund_name: str,
     section_text: str,
     rule_hint: dict[str, Any],
+    provider: str | None = None,
+    model: str | None = None,
     max_retries: int = 2,
 ) -> BenchmarkExtraction | None:
-    if not llm_available():
+    active_provider = resolve_active_provider(provider)
+    if not active_provider:
         return None
 
-    try:
-        import anthropic
-    except ImportError:
-        logger.warning("anthropic package not installed; skipping LLM extraction")
-        return None
-
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
     user_prompt = json.dumps(
         {
             "fund_name": fund_name,
@@ -83,17 +252,27 @@ def extract_with_llm(
         ensure_ascii=False,
     )
 
+    # Determine default model for active provider
+    if active_provider == "anthropic":
+        active_model = model or ANTHROPIC_MODEL
+        call_fn = lambda p: _call_anthropic(p, active_model)
+    elif active_provider == "gemini":
+        active_model = model or GEMINI_MODEL
+        call_fn = lambda p: _call_gemini(p, active_model)
+    elif active_provider == "openai":
+        active_model = model or OPENAI_MODEL
+        call_fn = lambda p: _call_openai(p, active_model)
+    elif active_provider == "ollama":
+        active_model = model or OLLAMA_MODEL
+        call_fn = lambda p: _call_ollama(p, active_model)
+    else:
+        logger.warning("Unsupported LLM provider: {}", active_provider)
+        return None
+
     last_error: Exception | None = None
     for attempt in range(1, max_retries + 1):
         try:
-            message = client.messages.create(
-                model=ANTHROPIC_MODEL,
-                max_tokens=1200,
-                temperature=0,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": user_prompt}],
-            )
-            content = message.content[0].text
+            content = call_fn(user_prompt)
             payload = _extract_json(content)
             payload.setdefault("extraction_method", ExtractionMethod.LLM.value)
             result = BenchmarkExtraction.model_validate(payload)
@@ -102,10 +281,11 @@ def extract_with_llm(
             return result
         except (ValidationError, json.JSONDecodeError, IndexError, KeyError) as exc:
             last_error = exc
-            logger.warning("LLM parse failed (attempt {}): {}", attempt, exc)
+            logger.warning("{} parse failed (attempt {}): {}", active_provider, attempt, exc)
         except Exception as exc:
             last_error = exc
-            logger.warning("LLM request failed (attempt {}): {}", attempt, exc)
+            logger.warning("{} request failed (attempt {}): {}", active_provider, attempt, exc)
 
-    logger.error("LLM extraction failed for {}: {}", fund_name, last_error)
+    logger.error("LLM extraction failed for {} using {}: {}", fund_name, active_provider, last_error)
     return None
+

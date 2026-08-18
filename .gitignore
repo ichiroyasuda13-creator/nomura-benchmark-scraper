@@ -7,8 +7,6 @@ __pycache__/
 .mypy_cache/
 data/pdfs/
 data/text/
-data/funds.json
-data/benchmarks.json
-output/
 logs/
 *.log
+

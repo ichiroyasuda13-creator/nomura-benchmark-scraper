@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -28,8 +29,10 @@ from app.providers import (
     extract_from_fund_name,
     has_rendou_trigger,
     is_index_like_fund_name,
+    is_money_market_fund,
     is_msci_benchmark,
     is_valid_benchmark_name,
+    parse_composite_components,
     prioritize_candidates,
 )
 
@@ -77,14 +80,10 @@ def _rule_extract_candidates(text: str) -> list[str]:
         for match in pattern.finditer(normalized):
             if match.lastindex is None:
                 composite_chunk = match.group(0)
-                parts = re.findall(
-                    r"(\d+(?:\.\d+)?)\s*[％%×x]\s*([A-Za-z0-9\-・（）()]+(?:指数|Index|TOPIX|MSCI|BPI|FTSE|Russell|S&P|NASDAQ|日経)[A-Za-z0-9\-・（）()]*)",
-                    composite_chunk,
-                    flags=re.I,
-                )
-                for _, index_name in parts:
-                    candidate = clean_index_name(index_name)
-                    if len(candidate) >= 2 and candidate not in candidates:
+                parsed_components = parse_composite_components(composite_chunk)
+                for comp in parsed_components:
+                    candidate = comp["index"]
+                    if candidate not in candidates:
                         candidates.append(candidate)
                 continue
             candidate = clean_index_name(match.group(1))
@@ -128,6 +127,19 @@ def _build_rule_extraction(
     fund: Fund,
     sections: dict[str, str],
 ) -> BenchmarkExtraction:
+    # 1. Check if fund is a money market fund / MRF
+    if is_money_market_fund(fund.fund_name):
+        return BenchmarkExtraction(
+            fund_type=FundType.ACTIVE_NO_BM,
+            benchmark="なし",
+            index_provider="なし",
+            is_msci=False,
+            confidence=Confidence.HIGH,
+            extraction_method=ExtractionMethod.RULE,
+            note="短期金融資産・MRF（ベンチマーク非設定）",
+            needs_review=False,
+        )
+
     combined = "\n".join(sections.values())
     negative = _detect_negative_benchmark(combined)
     candidates = _rule_extract_candidates(combined)
@@ -143,21 +155,31 @@ def _build_rule_extraction(
             reference_index=reference_index,
             confidence=Confidence.HIGH,
             extraction_method=ExtractionMethod.RULE,
-            note="否定表現を検出",
+            note="否定表現を検出（ベンチマーク非設定）",
             needs_review=False,
         )
 
     benchmark = candidates[0] if candidates else None
     composite = fund_type == FundType.BALANCE_COMPOSITE or len(candidates) > 1
+
+    benchmark_detail: dict[str, Any] | None = None
+    if composite and candidates:
+        parsed = parse_composite_components(combined)
+        if parsed:
+            benchmark_detail = {"components": parsed}
+            formatted_parts = [
+                f"{c['weight']}%×{c['index']}" if c.get("weight") else c['index']
+                for c in parsed
+            ]
+            benchmark = " + ".join(formatted_parts[:4])
+        else:
+            benchmark_detail = {
+                "components": [{"index": name} for name in candidates],
+            }
+            benchmark = " + ".join(candidates[:4])
+
     index_provider = detect_index_provider(benchmark, composite=composite)
     confidence = _confidence_for_rule(benchmark, index_provider)
-
-    benchmark_detail: str | dict[str, Any] | None = None
-    if composite and candidates:
-        benchmark_detail = {
-            "components": [{"index": name} for name in candidates],
-        }
-        benchmark = " + ".join(candidates[:4])
 
     if fund_type == FundType.UNKNOWN and is_index_like_fund_name(
         fund.fund_name,
@@ -180,6 +202,18 @@ def _build_rule_extraction(
 
 
 def _build_name_fallback_extraction(fund: Fund) -> BenchmarkExtraction | None:
+    if is_money_market_fund(fund.fund_name):
+        return BenchmarkExtraction(
+            fund_type=FundType.ACTIVE_NO_BM,
+            benchmark="なし",
+            index_provider="なし",
+            is_msci=False,
+            confidence=Confidence.HIGH,
+            extraction_method=ExtractionMethod.NAME_FALLBACK,
+            note="短期金融資産・MRF（ベンチマーク非設定）",
+            needs_review=False,
+        )
+
     matched = extract_from_fund_name(fund.fund_name)
     if not matched:
         return None
@@ -231,10 +265,10 @@ def _finalize_extraction(extraction: BenchmarkExtraction) -> BenchmarkExtraction
             extraction.benchmark,
             composite=extraction.fund_type == FundType.BALANCE_COMPOSITE,
         )
-        extraction.is_msci = is_msci_benchmark(
-            extraction.benchmark,
-            extraction.index_provider,
-        )
+    extraction.is_msci = is_msci_benchmark(
+        extraction.benchmark,
+        extraction.index_provider,
+    )
     return extraction
 
 
@@ -245,8 +279,10 @@ def _apply_llm_if_needed(
     *,
     use_llm: bool,
     used_ocr: bool,
+    provider: str | None = None,
+    model: str | None = None,
 ) -> BenchmarkExtraction:
-    if not use_llm or not llm_available():
+    if not use_llm or not llm_available(provider):
         return current
     if current.confidence == Confidence.HIGH and current.benchmark:
         return current
@@ -255,6 +291,8 @@ def _apply_llm_if_needed(
         fund_name=fund.fund_name,
         section_text="\n\n".join(sections.values()),
         rule_hint=current.model_dump(mode="json"),
+        provider=provider,
+        model=model,
     )
     if not llm_result or not llm_result.benchmark:
         return current
@@ -300,6 +338,9 @@ def extract_benchmark_for_fund(
     fund: Fund,
     *,
     use_llm: bool = True,
+    provider: str | None = None,
+    model: str | None = None,
+    force_ocr: bool = False,
 ) -> BenchmarkRecord:
     text_path = TEXT_DIR / f"{fund.fund_code}.txt"
     if not text_path.exists():
@@ -318,6 +359,12 @@ def extract_benchmark_for_fund(
     text = _strip_header(raw_text)
     used_ocr = raw_text.startswith("# ocr=yes")
 
+    if force_ocr:
+        ocr_text, ocr_applied = _run_forced_ocr(fund, text)
+        if ocr_applied:
+            text = ocr_text
+            used_ocr = True
+
     sections = extract_relevant_sections(text)
     final = _build_rule_extraction(fund, sections)
     final = _apply_llm_if_needed(
@@ -326,9 +373,11 @@ def extract_benchmark_for_fund(
         final,
         use_llm=use_llm,
         used_ocr=used_ocr,
+        provider=provider,
+        model=model,
     )
 
-    if _should_force_ocr(fund, text, final):
+    if not force_ocr and _should_force_ocr(fund, text, final):
         ocr_text, ocr_applied = _run_forced_ocr(fund, text)
         if ocr_applied:
             sections = extract_relevant_sections(ocr_text)
@@ -343,6 +392,8 @@ def extract_benchmark_for_fund(
                     ocr_rule,
                     use_llm=use_llm,
                     used_ocr=True,
+                    provider=provider,
+                    model=model,
                 )
 
     if not final.benchmark and final.fund_type != FundType.ACTIVE_NO_BM:
@@ -363,12 +414,101 @@ def extract_benchmark_for_fund(
     return BenchmarkRecord.from_fund(fund, final)
 
 
-def run_stage5(*, use_llm: bool = True) -> list[BenchmarkRecord]:
+def run_stage5(*, use_llm: bool = True, provider: str | None = None, model: str | None = None) -> list[BenchmarkRecord]:
     raw = load_json(FUNDS_JSON, [])
     if not raw:
         raise RuntimeError("Stage5 requires funds.json. Run stage1 first.")
     funds = [Fund.model_validate(item) for item in raw]
-    records = [extract_benchmark_for_fund(fund, use_llm=use_llm) for fund in funds]
+    records = [
+        extract_benchmark_for_fund(fund, use_llm=use_llm, provider=provider, model=model)
+        for fund in funds
+    ]
     save_json(BENCHMARKS_JSON, [record.model_dump(mode="json") for record in records])
     logger.info("Stage5: extracted benchmarks for {} funds", len(records))
     return records
+
+
+def reextract_single_fund(
+    fund_code: str,
+    *,
+    use_llm: bool = True,
+    provider: str | None = None,
+    model: str | None = None,
+    force_ocr: bool = False,
+) -> BenchmarkRecord | None:
+    """Re-extract benchmark for a single specific fund and update benchmarks.json."""
+    raw_funds = load_json(FUNDS_JSON, [])
+    matching_funds = [f for f in raw_funds if f.get("fund_code") == fund_code]
+    if not matching_funds:
+        logger.warning("Fund {} not found in {}", fund_code, FUNDS_JSON)
+        return None
+
+    fund = Fund.model_validate(matching_funds[0])
+    new_record = extract_benchmark_for_fund(
+        fund,
+        use_llm=use_llm,
+        provider=provider,
+        model=model,
+        force_ocr=force_ocr,
+    )
+
+    # Update in benchmarks.json
+    raw_records = load_json(BENCHMARKS_JSON, [])
+    updated = False
+    new_list = []
+    for r in raw_records:
+        if r.get("fund_code") == fund_code:
+            new_list.append(new_record.model_dump(mode="json"))
+            updated = True
+        else:
+            new_list.append(r)
+
+    if not updated:
+        new_list.append(new_record.model_dump(mode="json"))
+
+    save_json(BENCHMARKS_JSON, new_list)
+    logger.info("Re-extracted and saved fund {}", fund_code)
+    return new_record
+
+
+def update_manual_override(
+    fund_code: str,
+    *,
+    benchmark: str | None,
+    index_provider: str,
+    fund_type: str,
+    needs_review: bool,
+    comment: str = "",
+    reviewer: str = "Analyst",
+) -> BenchmarkRecord | None:
+    """Manually edit/override benchmark data for a fund and persist."""
+    raw_records = load_json(BENCHMARKS_JSON, [])
+    updated_record: BenchmarkRecord | None = None
+    new_list = []
+
+    for r in raw_records:
+        if r.get("fund_code") == fund_code:
+            rec = BenchmarkRecord.model_validate(r)
+            rec.benchmark = benchmark
+            rec.index_provider = index_provider
+            try:
+                rec.fund_type = FundType(fund_type)
+            except ValueError:
+                pass
+            rec.needs_review = needs_review
+            rec.manual_override = True
+            rec.review_comment = comment
+            rec.reviewed_at = datetime.now()
+            rec.reviewed_by = reviewer
+            rec.is_msci = is_msci_benchmark(rec.benchmark, rec.index_provider)
+            rec.confidence = Confidence.HIGH if not needs_review else rec.confidence
+            updated_record = rec
+            new_list.append(rec.model_dump(mode="json"))
+        else:
+            new_list.append(r)
+
+    if updated_record:
+        save_json(BENCHMARKS_JSON, new_list)
+        logger.info("Saved manual override for fund {}", fund_code)
+    return updated_record
+

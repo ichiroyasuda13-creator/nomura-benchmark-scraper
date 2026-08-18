@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from loguru import logger
 
-from app.config import FUNDS_JSON, PDF_DIR
+from app.config import FUNDS_JSON, MAX_WORKERS, PDF_DIR
 from app.http_client import HttpClient, load_json
 from app.models import Fund
 
@@ -35,16 +36,24 @@ def download_pdf(
     return target
 
 
-def run_stage3(*, force: bool = False) -> list[Path]:
+def run_stage3(*, force: bool = False, max_workers: int = MAX_WORKERS) -> list[Path]:
     raw = load_json(FUNDS_JSON, [])
     if not raw:
         raise RuntimeError("Stage3 requires funds.json. Run stage1 first.")
     funds = [Fund.model_validate(item) for item in raw]
-    client = HttpClient()
     downloaded: list[Path] = []
-    for fund in funds:
-        path = download_pdf(fund, client, force=force)
-        if path:
-            downloaded.append(path)
+
+    def _worker(fund: Fund) -> Path | None:
+        client = HttpClient()
+        return download_pdf(fund, client, force=force)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_worker, fund): fund for fund in funds}
+        for future in as_completed(futures):
+            path = future.result()
+            if path:
+                downloaded.append(path)
+
     logger.info("Stage3: {} PDFs available", len(downloaded))
     return downloaded
+

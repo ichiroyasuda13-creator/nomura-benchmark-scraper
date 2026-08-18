@@ -160,3 +160,15 @@ def test_reject_invalid_benchmark_candidate() -> None:
     assert is_valid_benchmark_name("（対象株価指数）") is False
     assert is_valid_benchmark_name("TOPIX（配当込み）") is True
     assert is_valid_benchmark_name("連動する投資成果（基準価額") is False
+
+
+def test_money_market_fund_mrf_rule_extraction() -> None:
+    fund = _fund("野村MRF (マネー・リザーブ・ファンド)")
+    text = "ファンドの目的\n安定した収益の確保をめざして運用を行います。"
+    sections = extract_relevant_sections(text)
+    result = _build_rule_extraction(fund, sections)
+    assert result.fund_type == FundType.ACTIVE_NO_BM
+    assert result.benchmark == "なし"
+    assert result.confidence == Confidence.HIGH
+    assert result.needs_review is False
+

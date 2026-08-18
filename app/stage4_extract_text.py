@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import fitz
 from loguru import logger
 
-from app.config import FUNDS_JSON, OCR_MIN_CHARS_PER_PAGE, PDF_DIR, TEXT_DIR
+from app.config import FUNDS_JSON, MAX_WORKERS, OCR_MIN_CHARS_PER_PAGE, PDF_DIR, TEXT_DIR
 from app.http_client import load_json
 from app.models import Fund
 
@@ -109,15 +110,23 @@ def extract_text_for_fund(
     return text_path
 
 
-def run_stage4(*, force: bool = False, allow_ocr: bool = True) -> list[Path]:
+def run_stage4(*, force: bool = False, allow_ocr: bool = True, max_workers: int = MAX_WORKERS) -> list[Path]:
     raw = load_json(FUNDS_JSON, [])
     if not raw:
         raise RuntimeError("Stage4 requires funds.json. Run stage1 first.")
     funds = [Fund.model_validate(item) for item in raw]
     outputs: list[Path] = []
-    for fund in funds:
-        path = extract_text_for_fund(fund, force=force, allow_ocr=allow_ocr)
-        if path:
-            outputs.append(path)
+
+    def _worker(fund: Fund) -> Path | None:
+        return extract_text_for_fund(fund, force=force, allow_ocr=allow_ocr)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_worker, fund): fund for fund in funds}
+        for future in as_completed(futures):
+            path = future.result()
+            if path:
+                outputs.append(path)
+
     logger.info("Stage4: {} text files available", len(outputs))
     return outputs
+

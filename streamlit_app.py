@@ -1,12 +1,13 @@
-"""Streamlit web app for Nomura Benchmark Scraper."""
+"""Streamlit web app for Nomura Benchmark Scraper & Intelligence."""
 
 from __future__ import annotations
 
 import io
+import json
 import sys
 import time
-from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
+from datetime import datetime
 
 import pandas as pd
 import streamlit as st
@@ -16,13 +17,25 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.config import BENCHMARKS_JSON, OUTPUT_DIR, ensure_dirs
-from app.http_client import load_json, setup_logging
-from app.models import BenchmarkRecord
+from app.config import (
+    ANTHROPIC_API_KEY,
+    BENCHMARKS_JSON,
+    FUNDS_JSON,
+    GEMINI_API_KEY,
+    MAX_WORKERS,
+    OPENAI_API_KEY,
+    OUTPUT_DIR,
+    TEXT_DIR,
+    ensure_dirs,
+)
+from app.http_client import load_json, save_json, setup_logging
+from app.llm import get_available_providers, llm_available
+from app.models import BenchmarkRecord, Confidence, FundType, format_aum_oku
+from app.stage5_benchmark import reextract_single_fund, update_manual_override
 
 # ── Page Config ────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="野村ベンチマーク抽出ツール",
+    page_title="野村ベンチマーク抽出 & 営業インテリジェンス",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -31,194 +44,91 @@ st.set_page_config(
 # ── Custom CSS ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-    /* Import fonts */
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap');
 
     .main { font-family: 'Inter', 'Noto Sans JP', sans-serif; }
 
-    /* Glass card style */
-    .glass-card {
-        background: rgba(17, 24, 39, 0.7);
-        backdrop-filter: blur(20px);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        border-radius: 16px;
-        padding: 1.5rem;
-        margin-bottom: 1rem;
-    }
-
-    /* Stage progress bar */
-    .stage-bar {
-        display: flex;
-        align-items: center;
-        gap: 0;
-        margin: 1rem 0;
-    }
-
-    .stage-dot {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 0.75rem;
-        font-weight: 700;
-        flex-shrink: 0;
-        transition: all 0.3s;
-    }
-
-    .stage-dot.pending {
-        background: #111827;
-        border: 2px solid rgba(255,255,255,0.1);
-        color: #64748b;
-    }
-
-    .stage-dot.active {
-        border: 2px solid #6366f1;
-        color: #6366f1;
-        background: #111827;
-        box-shadow: 0 0 15px rgba(99,102,241,0.25);
-        animation: pulse 2s infinite;
-    }
-
-    .stage-dot.done {
-        background: #34d399;
-        border: 2px solid #34d399;
-        color: white;
-    }
-
-    .stage-connector {
-        flex: 1;
-        height: 2px;
-        background: rgba(255,255,255,0.06);
-        min-width: 20px;
-    }
-
-    .stage-connector.done {
-        background: #34d399;
-    }
-
-    .stage-label {
-        font-size: 0.6rem;
-        color: #64748b;
+    /* App Header */
+    .app-header {
         text-align: center;
-        margin-top: 4px;
+        padding: 1rem 0 1.5rem;
+    }
+    .app-header h1 {
+        font-size: 2.2rem;
+        font-weight: 800;
+        background: linear-gradient(135deg, #ffffff 40%, #818cf8);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -0.02em;
+    }
+    .app-header p {
+        color: #94a3b8;
+        font-size: 0.95rem;
     }
 
-    .stage-label.active { color: #818cf8; }
-    .stage-label.done { color: #34d399; }
-
-    @keyframes pulse {
-        0%, 100% { box-shadow: 0 0 15px rgba(99,102,241,0.25); }
-        50% { box-shadow: 0 0 25px rgba(99,102,241,0.4); }
-    }
-
-    /* Badges */
-    .badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 100px;
-        font-size: 0.68rem;
-        font-weight: 600;
-    }
-
-    .badge-success { background: rgba(52,211,153,0.1); color: #34d399; }
-    .badge-warning { background: rgba(251,191,36,0.1); color: #fbbf24; }
-    .badge-error { background: rgba(248,113,113,0.1); color: #f87171; }
-    .badge-info { background: rgba(96,165,250,0.1); color: #60a5fa; }
-
-    /* Stat cards */
-    .stat-grid {
+    /* KPI Cards */
+    .kpi-container {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         gap: 1rem;
-        margin: 1rem 0;
+        margin-bottom: 1.5rem;
     }
-
-    .stat-card {
+    .kpi-box {
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 1.2rem;
         text-align: center;
-        padding: 1rem;
-        background: rgba(255,255,255,0.04);
-        border-radius: 10px;
-        border: 1px solid rgba(255,255,255,0.06);
+        backdrop-filter: blur(12px);
     }
-
-    .stat-value {
-        font-size: 1.8rem;
-        font-weight: 700;
-        line-height: 1.2;
-    }
-
-    .stat-label {
-        font-size: 0.72rem;
+    .kpi-box-title {
+        font-size: 0.75rem;
         color: #64748b;
-        margin-top: 4px;
-    }
-
-    .accent { color: #6366f1; }
-    .success { color: #34d399; }
-    .warning { color: #fbbf24; }
-
-    /* Header */
-    .app-title {
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-
-    .app-title h1 {
-        font-size: 2rem;
+        text-transform: uppercase;
         font-weight: 700;
-        background: linear-gradient(135deg, #f1f5f9 30%, #818cf8);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
+    }
+    .kpi-box-num {
+        font-size: 2rem;
+        font-weight: 800;
+        margin: 4px 0;
+        color: #f8fafc;
+    }
+    .kpi-box-sub {
+        font-size: 0.8rem;
+        color: #94a3b8;
     }
 
-    .app-title p {
-        color: #94a3b8;
-        font-size: 0.9rem;
+    /* Badges */
+    .badge-msci {
+        background: rgba(16, 185, 129, 0.15);
+        color: #34d399;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 100px;
+    }
+    .badge-review {
+        background: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 100px;
     }
 
     /* Hide Streamlit branding */
     #MainMenu { visibility: hidden; }
     footer { visibility: hidden; }
-    header[data-testid="stHeader"] { background: transparent; }
 </style>
 """, unsafe_allow_html=True)
 
 
-# ── Stage Progress Rendering ──────────────────────────────────────────────
-STAGE_LABELS = ["一覧取得", "PDF URL", "DL", "テキスト", "BM抽出", "出力"]
-
-
-def render_stage_progress(current_stage: int) -> None:
-    """Render the 6-stage progress bar as HTML."""
-    html_parts = ['<div class="stage-bar">']
-    for i in range(1, 7):
-        if i < current_stage:
-            cls = "done"
-        elif i == current_stage:
-            cls = "active"
-        else:
-            cls = "pending"
-
-        html_parts.append(
-            f'<div style="display:flex;flex-direction:column;align-items:center">'
-            f'<div class="stage-dot {cls}">{i}</div>'
-            f'<div class="stage-label {cls}">{STAGE_LABELS[i - 1]}</div>'
-            f'</div>'
-        )
-        if i < 6:
-            conn_cls = "done" if i < current_stage else ""
-            html_parts.append(f'<div class="stage-connector {conn_cls}"></div>')
-
-    html_parts.append("</div>")
-    return "".join(html_parts)
-
-
 # ── Pipeline Runner ────────────────────────────────────────────────────────
-def run_pipeline(max_funds: int, use_llm: bool, force: bool) -> list[BenchmarkRecord]:
-    """Run the full pipeline with Streamlit progress updates."""
+def run_pipeline(
+    max_funds: int,
+    use_llm: bool,
+    force: bool,
+    provider: str | None = None,
+    workers: int = 5,
+) -> list[BenchmarkRecord]:
     from app.stage1_list import run_stage1
     from app.stage2_pdf_url import run_stage2
     from app.stage3_download import run_stage3
@@ -229,279 +139,409 @@ def run_pipeline(max_funds: int, use_llm: bool, force: bool) -> list[BenchmarkRe
     ensure_dirs()
     setup_logging()
 
-    progress_bar = st.progress(0, text="パイプライン開始中...")
-    stage_display = st.empty()
+    prog_bar = st.progress(0, text="パイプライン初期化中...")
+    status_text = st.empty()
     log_area = st.empty()
     logs: list[str] = []
 
-    def update(stage: int, msg: str) -> None:
-        progress_bar.progress(stage / 7, text=f"Stage {stage}/6: {STAGE_LABELS[stage - 1]}")
-        stage_display.markdown(render_stage_progress(stage), unsafe_allow_html=True)
-        logs.append(f"[Stage {stage}] {msg}")
-        log_area.code("\n".join(logs[-20:]), language="text")
+    def log(msg: str) -> None:
+        logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+        log_area.code("\n".join(logs[-15:]), language="text")
 
     # Stage 1
-    update(1, "ファンド一覧取得中...")
+    prog_bar.progress(1 / 7, text="Stage 1/6: ファンド一覧取得中...")
+    status_text.info("Stage 1: 野村検索APIからAUM上位ファンドを取得中...")
     funds = run_stage1(force=force, max_funds=max_funds)
-    logs.append(f"  → {len(funds)} ファンド取得完了")
-    log_area.code("\n".join(logs[-20:]), language="text")
+    log(f"Stage 1 完了: {len(funds)} 本のファンド情報を取得")
 
     # Stage 2
-    update(2, "PDF URL解決中...")
-    run_stage2(force=force)
-    logs.append("  → PDF URL解決完了")
-    log_area.code("\n".join(logs[-20:]), language="text")
+    prog_bar.progress(2 / 7, text="Stage 2/6: 交付目論見書PDF URL解決中...")
+    status_text.info(f"Stage 2: PDF URLを並行解決中 (並行数: {workers})...")
+    run_stage2(force=force, max_workers=workers)
+    log("Stage 2 完了: 交付目論見書URL解決完了")
 
     # Stage 3
-    update(3, "PDFダウンロード中...")
-    run_stage3(force=force)
-    logs.append("  → PDFダウンロード完了")
-    log_area.code("\n".join(logs[-20:]), language="text")
+    prog_bar.progress(3 / 7, text="Stage 3/6: PDFダウンロード中...")
+    status_text.info(f"Stage 3: 交付目論見書PDFをダウンロード中 (並行数: {workers})...")
+    run_stage3(force=force, max_workers=workers)
+    log("Stage 3 完了: PDFダウンロード完了")
 
     # Stage 4
-    update(4, "テキスト抽出中...")
-    run_stage4(force=force, allow_ocr=True)
-    logs.append("  → テキスト抽出完了")
-    log_area.code("\n".join(logs[-20:]), language="text")
+    prog_bar.progress(4 / 7, text="Stage 4/6: テキスト抽出中...")
+    status_text.info("Stage 4: PyMuPDF / OCRで目論見書テキストを抽出中...")
+    run_stage4(force=force, allow_ocr=True, max_workers=workers)
+    log("Stage 4 完了: テキスト抽出完了")
 
     # Stage 5
-    update(5, "ベンチマーク抽出中 (LLM使用)" if use_llm else "ベンチマーク抽出中 (ルールベース)")
-    records = run_stage5(use_llm=use_llm)
-    logs.append(f"  → {len(records)} ファンドのベンチマーク抽出完了")
-    log_area.code("\n".join(logs[-20:]), language="text")
+    prov_label = provider or "Auto"
+    prog_bar.progress(5 / 7, text=f"Stage 5/6: ベンチマーク抽出中 (LLM: {prov_label})...")
+    status_text.info(f"Stage 5: ベンチマーク指数と提供者を抽出中 (LLM Provider: {prov_label})...")
+    records = run_stage5(use_llm=use_llm, provider=provider)
+    log(f"Stage 5 完了: {len(records)} 本のベンチマーク抽出完了")
 
     # Stage 6
-    update(6, "CSV/Excel出力中...")
+    prog_bar.progress(6 / 7, text="Stage 6/6: 多機能Excel & CSV出力中...")
+    status_text.info("Stage 6: スタイル適用済み多機能ExcelレポートとCSVを生成中...")
     run_stage6(records)
-    logs.append("  → CSV/Excel出力完了")
-    log_area.code("\n".join(logs[-20:]), language="text")
+    log("Stage 6 完了: nomura_benchmarks.xlsx / csv 出力完了")
 
-    progress_bar.progress(1.0, text="✅ パイプライン完了!")
-    stage_display.markdown(render_stage_progress(7), unsafe_allow_html=True)
-
+    prog_bar.progress(1.0, text="✅ 全ステージ完了!")
+    status_text.success("✅ パイプラインが正常に完了しました!")
     return records
 
 
-# ── Load existing results ──────────────────────────────────────────────────
-def load_existing_results() -> list[dict]:
-    """Load previously extracted results from JSON."""
+# ── Load existing data ─────────────────────────────────────────────────────
+def load_records() -> list[BenchmarkRecord]:
     if BENCHMARKS_JSON.exists():
         raw = load_json(BENCHMARKS_JSON, [])
-        return [BenchmarkRecord.model_validate(item).model_dump(mode="json") for item in raw]
+        return [BenchmarkRecord.model_validate(item) for item in raw]
     return []
 
 
-# ── Confidence badge helper ────────────────────────────────────────────────
-def confidence_color(conf: str) -> str:
-    return {"high": "🟢", "medium": "🟡", "low": "🔴"}.get(conf, "⚪")
-
-
-# ── Main App ───────────────────────────────────────────────────────────────
+# ── Main Application ───────────────────────────────────────────────────────
 def main() -> None:
-    # Header
-    st.markdown(
-        '<div class="app-title">'
-        "<h1>📊 野村ベンチマーク抽出ツール</h1>"
-        "<p>Nomura Fund Benchmark Extractor — 交付目論見書PDFからベンチマーク指数を自動抽出</p>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    st.markdown("""
+    <div class="app-header">
+        <h1>📊 野村ベンチマーク抽出 & 営業インテリジェンス</h1>
+        <p>交付目論見書PDFからのマルチLLMベンチマーク自動抽出・MSCIシェア分析・インタラクティブレビュー基盤</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # ── Sidebar Controls ───────────────────────────────────────────────────
+    # ── Sidebar Configurations ─────────────────────────────────────────────
     with st.sidebar:
-        st.header("⚙️ 実行設定")
+        st.header("⚙️ パイプライン実行設定")
+
+        # LLM Provider Selection
+        available_providers = get_available_providers()
+        prov_options = {"auto": "自動選択 (設定キー優先)"}
+        for p in available_providers:
+            prov_options[p["id"]] = f"{p['name']} ({p['model']})"
+
+        selected_provider_key = st.selectbox(
+            "🤖 LLMプロバイダー",
+            options=list(prov_options.keys()),
+            format_func=lambda x: prov_options[x],
+            help="ベンチマーク抽出に使用するAIモデルを選択",
+        )
+        provider_arg = None if selected_provider_key == "auto" else selected_provider_key
 
         max_funds = st.slider(
-            "取得ファンド数",
+            "取得ファンド数 (AUM順)",
             min_value=5,
             max_value=200,
             value=100,
             step=5,
-            help="AUM順上位からの取得数",
         )
 
-        use_llm = st.toggle(
-            "LLM抽出 (Claude Sonnet 5)",
-            value=True,
-            help="ONでAnthropicのLLMを使用、OFFでルールベースのみ",
+        workers = st.slider(
+            "並行ダウンロード数",
+            min_value=1,
+            max_value=10,
+            value=5,
+            help="ネットワーク並行処理ワーカ数",
         )
 
-        force = st.toggle(
-            "キャッシュ無視で再実行",
-            value=False,
-            help="ONでPDF/テキスト等を全て再取得",
-        )
+        use_llm = st.toggle("LLM抽出を有効化", value=True)
+        force = st.toggle("キャッシュ無視で全再取得", value=False)
 
         st.divider()
-
-        run_clicked = st.button(
-            "🚀 実行開始",
-            type="primary",
-            use_container_width=True,
-        )
+        run_clicked = st.button("🚀 パイプライン実行開始", type="primary", use_container_width=True)
 
         st.divider()
+        st.subheader("🔑 API Key 接続状態")
+        col_k1, col_k2 = st.columns(2)
+        col_k1.write(f"Claude: {'✅' if ANTHROPIC_API_KEY else '⚪'}")
+        col_k2.write(f"Gemini: {'✅' if GEMINI_API_KEY else '⚪'}")
+        col_k1.write(f"OpenAI: {'✅' if OPENAI_API_KEY else '⚪'}")
 
-        # API Key status
-        from app.config import ANTHROPIC_API_KEY
-        if ANTHROPIC_API_KEY:
-            st.success("✅ API Key 設定済み", icon="🔑")
-        else:
-            st.warning("⚠️ API Key 未設定", icon="🔑")
-            st.caption("Streamlit Cloud: Secrets で `ANTHROPIC_API_KEY` を設定")
-
-    # ── Run Pipeline ───────────────────────────────────────────────────────
+    # ── Run pipeline trigger ───────────────────────────────────────────────
     if run_clicked:
-        with st.spinner("パイプライン実行中..."):
-            try:
-                records = run_pipeline(max_funds, use_llm, force)
-                st.session_state["results"] = [
-                    r.model_dump(mode="json") for r in records
-                ]
-                st.success(f"✅ {len(records)} ファンドの抽出が完了しました!")
-            except Exception as e:
-                st.error(f"❌ エラー: {e}")
+        try:
+            records = run_pipeline(
+                max_funds=max_funds,
+                use_llm=use_llm,
+                force=force,
+                provider=provider_arg,
+                workers=workers,
+            )
+            st.session_state["records"] = records
+        except Exception as e:
+            st.error(f"❌ 実行エラー: {e}")
 
-    # ── Load results (from session or disk) ────────────────────────────────
-    results = st.session_state.get("results")
-    if not results:
-        results = load_existing_results()
-        if results:
-            st.session_state["results"] = results
+    # Load data
+    records = st.session_state.get("records")
+    if not records:
+        records = load_records()
+        if records:
+            st.session_state["records"] = records
 
-    # ── Display Results ────────────────────────────────────────────────────
-    if results:
-        # Stats
-        total = len(results)
-        extracted = sum(1 for r in results if r.get("benchmark") and r["benchmark"] != "なし")
-        needs_review = sum(1 for r in results if r.get("needs_review"))
-        msci_count = sum(1 for r in results if r.get("is_msci"))
+    if not records:
+        st.info("💡 サイドバーの「パイプライン実行開始」をクリックしてデータを取得してください。")
+        return
 
-        st.markdown(
-            f"""
-            <div class="stat-grid">
-                <div class="stat-card">
-                    <div class="stat-value accent">{total}</div>
-                    <div class="stat-label">ファンド総数</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value success">{extracted}</div>
-                    <div class="stat-label">BM抽出成功</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value warning">{needs_review}</div>
-                    <div class="stat-label">要確認</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{msci_count}</div>
-                    <div class="stat-label">MSCI関連</div>
-                </div>
+    # ── Top Level Tabs ─────────────────────────────────────────────────────
+    tab1, tab2, tab3 = st.tabs([
+        "📈 マーケット & MSCI営業分析",
+        "📋 ファンド一覧 & レビュー",
+        "🔍 目論見書インスペクター & 単体再抽出",
+    ])
+
+    # ── Calculate Metrics ──────────────────────────────────────────────────
+    total_aum = sum(r.aum for r in records)
+    total_count = len(records)
+    msci_records = [r for r in records if r.is_msci]
+    msci_aum = sum(r.aum for r in msci_records)
+    msci_count = len(msci_records)
+    review_count = sum(1 for r in records if r.needs_review)
+
+    msci_aum_share = (msci_aum / total_aum * 100) if total_aum else 0
+    msci_count_share = (msci_count / total_count * 100) if total_count else 0
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # TAB 1: ANALYTICS & MARKET SHARE
+    # ═══════════════════════════════════════════════════════════════════════
+    with tab1:
+        # KPI Row
+        st.markdown(f"""
+        <div class="kpi-container">
+            <div class="kpi-box">
+                <div class="kpi-box-title">総ファンド数 (取得対象)</div>
+                <div class="kpi-box-num">{total_count}</div>
+                <div class="kpi-box-sub">AUM合計: {total_aum / 1e12:.2f} 兆円</div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            <div class="kpi-box">
+                <div class="kpi-box-title">MSCI 採用ファンド数</div>
+                <div class="kpi-box-num" style="color: #38bdf8;">{msci_count}</div>
+                <div class="kpi-box-sub">件数シェア: {msci_count_share:.1f}%</div>
+            </div>
+            <div class="kpi-box">
+                <div class="kpi-box-title">MSCI 採用 AUM</div>
+                <div class="kpi-box-num" style="color: #34d399;">{msci_aum / 1e12:.2f} 兆円</div>
+                <div class="kpi-box-sub">AUMシェア: {msci_aum_share:.1f}%</div>
+            </div>
+            <div class="kpi-box">
+                <div class="kpi-box-title">要確認 (レビュー待ち)</div>
+                <div class="kpi-box-num" style="color: #fbbf24;">{review_count}</div>
+                <div class="kpi-box-sub">確度要確認または未確定</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Download buttons
-        col1, col2, col3 = st.columns([1, 1, 4])
-        csv_path = OUTPUT_DIR / "nomura_benchmarks.csv"
-        xlsx_path = OUTPUT_DIR / "nomura_benchmarks.xlsx"
+        col_a1, col_a2 = st.columns([1, 1])
 
-        if csv_path.exists():
-            with open(csv_path, "rb") as f:
-                col1.download_button(
-                    "📄 CSV",
-                    f.read(),
-                    file_name="nomura_benchmarks.csv",
-                    mime="text/csv",
-                )
+        with col_a1:
+            st.subheader("🏛️ 指数提供者別 AUMシェア")
+            prov_agg: dict[str, dict] = {}
+            for r in records:
+                p = r.index_provider or "なし"
+                if p not in prov_agg:
+                    prov_agg[p] = {"provider": p, "aum_oku": 0.0, "count": 0, "is_msci": r.is_msci}
+                prov_agg[p]["aum_oku"] += r.aum / 1e8
+                prov_agg[p]["count"] += 1
 
-        if xlsx_path.exists():
-            with open(xlsx_path, "rb") as f:
-                col2.download_button(
-                    "📊 Excel",
-                    f.read(),
-                    file_name="nomura_benchmarks.xlsx",
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
+            prov_df = pd.DataFrame(list(prov_agg.values()))
+            prov_df.sort_values(by="aum_oku", ascending=False, inplace=True)
+            prov_df["aum_share"] = (prov_df["aum_oku"] / (total_aum / 1e8) * 100).round(1)
 
-        # Search filter
-        search = st.text_input(
-            "🔍 検索",
-            placeholder="ファンド名・ベンチマークで検索...",
-            label_visibility="collapsed",
-        )
+            st.bar_chart(
+                prov_df.set_index("provider")["aum_oku"],
+                color="#6366f1",
+                x_label="指数提供者",
+                y_label="純資産総額 (億円)",
+            )
 
-        # Filter results
-        display_results = results
-        if search:
-            query = search.lower()
-            display_results = [
-                r for r in results
-                if query in (r.get("fund_name") or "").lower()
-                or query in (r.get("benchmark") or "").lower()
-                or query in (r.get("fund_code") or "").lower()
-            ]
+        with col_a2:
+            st.subheader("🎯 MSCI営業アプローチ優先ターゲット")
+            non_msci = [r for r in records if not r.is_msci and r.aum > 0]
+            non_msci.sort(key=lambda x: x.aum, reverse=True)
 
-        # Build DataFrame for display
-        df = pd.DataFrame(display_results)
-
-        display_cols = {
-            "rank": "順位",
-            "fund_name": "ファンド名",
-            "fund_code": "コード",
-            "aum": "AUM",
-            "fund_type": "種別",
-            "benchmark": "ベンチマーク",
-            "index_provider": "指数提供者",
-            "confidence": "信頼度",
-            "extraction_method": "抽出方法",
-            "needs_review": "要確認",
-        }
-
-        if not df.empty:
-            show_df = df[[c for c in display_cols if c in df.columns]].copy()
-            show_df.rename(columns=display_cols, inplace=True)
-
-            # Format AUM to 億円
-            if "AUM" in show_df.columns:
-                show_df["AUM"] = show_df["AUM"].apply(
-                    lambda x: f"{x / 1e8:,.0f}億円" if x else "—"
-                )
-
-            # Format confidence
-            if "信頼度" in show_df.columns:
-                show_df["信頼度"] = show_df["信頼度"].apply(
-                    lambda x: f"{confidence_color(x)} {x}"
-                )
-
-            # Format needs_review
-            if "要確認" in show_df.columns:
-                show_df["要確認"] = show_df["要確認"].apply(
-                    lambda x: "⚠️ 要確認" if x else "✅ OK"
-                )
-
+            targets_data = []
+            for t in non_msci[:8]:
+                targets_data.append({
+                    "順位": t.rank,
+                    "ファンド名": t.fund_name,
+                    "AUM (億円)": round(t.aum / 1e8, 0),
+                    "現ベンチマーク": t.benchmark or "—",
+                    "現提供会社": t.index_provider,
+                })
+            targets_df = pd.DataFrame(targets_data)
             st.dataframe(
-                show_df,
+                targets_df,
                 use_container_width=True,
                 hide_index=True,
-                height=600,
             )
-        else:
-            st.info("検索結果がありません")
 
-    else:
-        # Empty state
-        st.markdown(
-            """
-            <div style="text-align:center; padding: 3rem; color: #64748b;">
-                <div style="font-size: 3rem; opacity: 0.3;">📂</div>
-                <p style="font-size: 0.9rem; margin-top: 1rem;">
-                    サイドバーの「実行開始」をクリックしてベンチマーク抽出を開始してください
-                </p>
-            </div>
-            """,
-            unsafe_allow_html=True,
+    # ═══════════════════════════════════════════════════════════════════════
+    # TAB 2: FUND LIST & INTERACTIVE REVIEW
+    # ═══════════════════════════════════════════════════════════════════════
+    with tab2:
+        col_f1, col_f2, col_f3, col_f4 = st.columns([2, 1, 1, 2])
+        search_query = col_f1.text_input("🔍 検索", placeholder="ファンド名・コード・ベンチマーク...")
+        prov_filter = col_f2.selectbox(
+            "指数提供者",
+            options=["全て"] + sorted(list({r.index_provider for r in records if r.index_provider})),
         )
+        review_filter = col_f3.selectbox(
+            "ステータス",
+            options=["全て", "要確認のみ", "OKのみ", "手動編集のみ"],
+        )
+
+        # Export buttons
+        with col_f4:
+            st.write("📥 ダウンロード")
+            col_d1, col_d2 = st.columns(2)
+            xlsx_path = OUTPUT_DIR / "nomura_benchmarks.xlsx"
+            csv_path = OUTPUT_DIR / "nomura_benchmarks.csv"
+
+            if xlsx_path.exists():
+                with open(xlsx_path, "rb") as f:
+                    col_d1.download_button("📊 Excel", f.read(), file_name="nomura_benchmarks.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            if csv_path.exists():
+                with open(csv_path, "rb") as f:
+                    col_d2.download_button("📄 CSV", f.read(), file_name="nomura_benchmarks.csv", mime="text/csv")
+
+        # Filter records
+        filtered_records = records
+        if search_query:
+            q = search_query.lower()
+            filtered_records = [
+                r for r in filtered_records
+                if q in r.fund_name.lower() or q in r.fund_code.lower() or q in (r.benchmark or "").lower()
+            ]
+        if prov_filter != "全て":
+            filtered_records = [r for r in filtered_records if r.index_provider == prov_filter]
+        if review_filter == "要確認のみ":
+            filtered_records = [r for r in filtered_records if r.needs_review]
+        elif review_filter == "OKのみ":
+            filtered_records = [r for r in filtered_records if not r.needs_review]
+        elif review_filter == "手動編集のみ":
+            filtered_records = [r for r in filtered_records if r.manual_override]
+
+        # Prepare editable DataFrame
+        edit_rows = []
+        for r in filtered_records:
+            edit_rows.append({
+                "順位": r.rank,
+                "ファンド名": r.fund_name,
+                "コード": r.fund_code,
+                "AUM (億円)": round(r.aum / 1e8, 0) if r.aum else 0,
+                "ファンド種別": r.fund_type.value if hasattr(r.fund_type, "value") else str(r.fund_type),
+                "ベンチマーク指数": r.benchmark or "",
+                "指数提供者": r.index_provider or "なし",
+                "MSCI": "🟢 MSCI" if r.is_msci else "⚪ 他社",
+                "信頼度": r.confidence.value if hasattr(r.confidence, "value") else str(r.confidence),
+                "要確認": r.needs_review,
+                "レビューメモ": r.review_comment or "",
+                "手動": "✏️" if r.manual_override else "",
+            })
+
+        table_df = pd.DataFrame(edit_rows)
+
+        st.caption(f"該当件数: {len(table_df)} 件 (テーブル内をダブルクリックでベンチマーク指数や提供者を直接編集できます)")
+        edited_df = st.data_editor(
+            table_df,
+            use_container_width=True,
+            hide_index=True,
+            height=500,
+            disabled=["順位", "ファンド名", "コード", "AUM (億円)", "MSCI", "信頼度", "手動"],
+        )
+
+        # Save changes button
+        if st.button("💾 編集内容を一括保存", type="primary"):
+            updated_count = 0
+            for _, row in edited_df.iterrows():
+                code = row["コード"]
+                bm = row["ベンチマーク指数"]
+                prov = row["指数提供者"]
+                ft = row["ファンド種別"]
+                needs_rev = bool(row["要確認"])
+                comm = str(row["レビューメモ"])
+
+                # Check if changed
+                orig = next((r for r in records if r.fund_code == code), None)
+                if orig and (orig.benchmark != bm or orig.index_provider != prov or orig.needs_review != needs_rev or orig.review_comment != comm):
+                    update_manual_override(
+                        fund_code=code,
+                        benchmark=bm,
+                        index_provider=prov,
+                        fund_type=ft,
+                        needs_review=needs_rev,
+                        comment=comm,
+                        reviewer="Streamlit Analyst",
+                    )
+                    updated_count += 1
+
+            if updated_count > 0:
+                st.success(f"✅ {updated_count} 件の変更を保存しました!")
+                st.session_state["records"] = load_records()
+                st.rerun()
+            else:
+                st.info("変更はありませんでした。")
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # TAB 3: PROSPECTUS INSPECTOR & SINGLE RE-EXTRACTION
+    # ═══════════════════════════════════════════════════════════════════════
+    with tab3:
+        st.subheader("🔍 目論見書インスペクター & 単体再抽出")
+        fund_options = {r.fund_code: f"#{r.rank} - {r.fund_name} ({format_aum_oku(r.aum)})" for r in records}
+        selected_code = st.selectbox(
+            "確認するファンドを選択",
+            options=list(fund_options.keys()),
+            format_func=lambda x: fund_options[x],
+        )
+
+        selected_record = next((r for r in records if r.fund_code == selected_code), None)
+
+        if selected_record:
+            col_i1, col_i2 = st.columns([1, 1])
+
+            with col_i1:
+                st.markdown(f"### {selected_record.fund_name}")
+                st.write(f"**ファンドコード**: `{selected_record.fund_code}` | **純資産**: {format_aum_oku(selected_record.aum)}")
+                st.write(f"**現在のベンチマーク**: `{selected_record.benchmark or 'なし'}`")
+                st.write(f"**指数提供会社**: `{selected_record.index_provider}` | **MSCI採用**: {'🟢 はい' if selected_record.is_msci else 'いいえ'}")
+                st.write(f"**抽出方法**: `{selected_record.extraction_method}` | **信頼度**: `{selected_record.confidence}`")
+                st.write(f"**要確認**: {'⚠️ 要確認' if selected_record.needs_review else '✅ 確認済み'}")
+
+                if selected_record.prospectus_pdf_url:
+                    st.link_button("📄 交付目論見書PDFを開く", selected_record.prospectus_pdf_url)
+
+                st.divider()
+                st.write("🛠️ **単体アクション**")
+                col_btn1, col_btn2 = st.columns(2)
+                if col_btn1.button("🔄 AI単体再抽出", key=f"reextract_{selected_code}"):
+                    with st.spinner("AI再抽出を実行中..."):
+                        new_rec = reextract_single_fund(
+                            fund_code=selected_code,
+                            use_llm=True,
+                            provider=provider_arg,
+                        )
+                        if new_rec:
+                            st.success(f"再抽出完了: {new_rec.benchmark} ({new_rec.index_provider})")
+                            st.session_state["records"] = load_records()
+                            st.rerun()
+
+                if col_btn2.button("🔍 強制OCR再抽出", key=f"ocr_{selected_code}"):
+                    with st.spinner("強制OCRを実行中..."):
+                        new_rec = reextract_single_fund(
+                            fund_code=selected_code,
+                            use_llm=True,
+                            provider=provider_arg,
+                            force_ocr=True,
+                        )
+                        if new_rec:
+                            st.success(f"OCR再抽出完了: {new_rec.benchmark} ({new_rec.index_provider})")
+                            st.session_state["records"] = load_records()
+                            st.rerun()
+
+            with col_i2:
+                st.markdown("### 📄 抽出テキスト (目論見書)")
+                text_path = TEXT_DIR / f"{selected_code}.txt"
+                if text_path.exists():
+                    raw_text = text_path.read_text(encoding="utf-8")
+                    st.text_area("テキスト内容", raw_text[:10000], height=450, disabled=True)
+                else:
+                    st.warning("テキストファイルが存在しません。パイプラインを実行してください。")
 
 
 if __name__ == "__main__":
