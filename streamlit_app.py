@@ -743,4 +743,9 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as _app_exc:
+        st.error(f"⚠️ アプリケーション実行エラー: {_app_exc}")
+        st.exception(_app_exc)
+
