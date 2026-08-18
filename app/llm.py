@@ -183,9 +183,17 @@ def _call_openai(prompt: str, model: str) -> str:
 
 
 def _call_gemini(prompt: str, model: str) -> str:
+    import os
+    import app.config as cfg
+    api_key = os.getenv("GEMINI_API_KEY") or cfg.GEMINI_API_KEY
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is not configured")
+
+    # If model is default or flash, use 2.0-flash or 1.5-flash
+    target_model = model or "gemini-2.0-flash"
     url = (
-        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        f"?key={GEMINI_API_KEY}"
+        f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent"
+        f"?key={api_key}"
     )
     headers = {"Content-Type": "application/json"}
     payload = {
@@ -196,14 +204,22 @@ def _call_gemini(prompt: str, model: str) -> str:
             "responseMimeType": "application/json",
         },
     }
-    with httpx.Client(timeout=15.0) as client:
+    with httpx.Client(timeout=20.0) as client:
         resp = client.post(url, headers=headers, json=payload)
+        # Fallback to gemini-1.5-flash if 2.0 returns 404
+        if resp.status_code == 404 and target_model != "gemini-1.5-flash":
+            url_fallback = (
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+                f"?key={api_key}"
+            )
+            resp = client.post(url_fallback, headers=headers, json=payload)
         resp.raise_for_status()
         data = resp.json()
         candidates = data.get("candidates", [])
         if not candidates:
             raise RuntimeError(f"Gemini API returned no candidates: {data}")
         return candidates[0]["content"]["parts"][0]["text"]
+
 
 
 

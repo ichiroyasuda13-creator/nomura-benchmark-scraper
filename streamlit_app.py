@@ -605,11 +605,47 @@ def main() -> None:
         run_clicked = st.button(button_label, type="primary", use_container_width=True)
 
         st.divider()
+        with st.expander("🔑 API Key 設定 (Gemini / Claude / OpenAI)", expanded=not bool(GEMINI_API_KEY or ANTHROPIC_API_KEY)):
+            st.caption("Google AI Studio で無料取得できる Gemini API Key を入力すると、AI抽出が即座に有効化されます。")
+            ui_gemini_key = st.text_input(
+                "Google Gemini API Key",
+                value=st.session_state.get("gemini_key", GEMINI_API_KEY),
+                type="password",
+                placeholder="AIzaSy...",
+                help="https://aistudio.google.com/ で無料発行可能",
+            )
+            if ui_gemini_key:
+                import os
+                import app.config as cfg
+                os.environ["GEMINI_API_KEY"] = ui_gemini_key
+                cfg.GEMINI_API_KEY = ui_gemini_key
+                st.session_state["gemini_key"] = ui_gemini_key
+
+            ui_anthropic_key = st.text_input(
+                "Anthropic Claude API Key",
+                value=st.session_state.get("anthropic_key", ANTHROPIC_API_KEY),
+                type="password",
+                placeholder="sk-ant-...",
+            )
+            if ui_anthropic_key:
+                import os
+                import app.config as cfg
+                os.environ["ANTHROPIC_API_KEY"] = ui_anthropic_key
+                cfg.ANTHROPIC_API_KEY = ui_anthropic_key
+                st.session_state["anthropic_key"] = ui_anthropic_key
+
+            st.markdown("[🔗 Google AI Studio で無料APIキーを取得](https://aistudio.google.com/app/apikey)")
+
+        current_gemini = os.getenv("GEMINI_API_KEY") or GEMINI_API_KEY
+        current_claude = os.getenv("ANTHROPIC_API_KEY") or ANTHROPIC_API_KEY
+        current_openai = os.getenv("OPENAI_API_KEY") or OPENAI_API_KEY
+
         st.markdown("### 🔑 API GATEWAY STATUS")
         col_k1, col_k2 = st.columns(2)
-        col_k1.caption(f"Claude: {'🟢 READY' if ANTHROPIC_API_KEY else '⚪ OFF'}")
-        col_k2.caption(f"Gemini: {'🟢 READY' if GEMINI_API_KEY else '⚪ OFF'}")
-        col_k1.caption(f"OpenAI: {'🟢 READY' if OPENAI_API_KEY else '⚪ OFF'}")
+        col_k1.caption(f"Gemini: {'🟢 READY' if current_gemini else '⚪ OFF'}")
+        col_k2.caption(f"Claude: {'🟢 READY' if current_claude else '⚪ OFF'}")
+        col_k1.caption(f"OpenAI: {'🟢 READY' if current_openai else '⚪ OFF'}")
+
 
     # ── Run pipeline trigger ───────────────────────────────────────────────
     if run_clicked:
