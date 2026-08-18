@@ -2,6 +2,8 @@
 
 Features:
 - Multi-Asset Managers (1社/2社/3社同時選択 & 一括実行): 野村アセット, 大和アセット, 三菱UFJアセット
+- 期間切り替え機能: 直近1ヶ月 ｜ 直近3ヶ月 ｜ 年初来 ｜ 過去1年間
+- ファンド別「日次買い付け推移グラフ & 累積フロー推移」（1日単位の資金流入可視化）
 - Distributor-by-Distributor Fund Rankings (添付雑誌DCトレンドフォーマット完全再現)
 - 買い付け金額（推定純流入） & 運用効果の精密計算
 - Broker & Distributor Intelligence (主要販売会社 & 販社別売れ行き)
@@ -54,7 +56,10 @@ try:
         get_funds_grouped_by_distributor,
         resolve_fund_distributors,
     )
-    from app.flow_calculator import estimate_fund_flow_from_returns
+    from app.flow_calculator import (
+        estimate_fund_flow_from_returns,
+        generate_daily_flow_timeseries,
+    )
     from app.http_client import load_json, save_json, setup_logging
     from app.llm import get_available_providers, llm_available
     from app.models import (
@@ -118,7 +123,7 @@ st.markdown("""
         display: grid;
         grid-template-columns: repeat(5, 1fr);
         gap: 0.8rem;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1.2rem;
     }
     .kpi-box {
         background: rgba(15, 23, 42, 0.7);
@@ -143,6 +148,18 @@ st.markdown("""
     .kpi-box-sub {
         font-size: 0.75rem;
         color: #94a3b8;
+    }
+
+    /* Period Selector Banner */
+    .period-banner {
+        background: rgba(30, 41, 59, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        padding: 8px 16px;
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
     }
 
     /* Distributor Magazine Section Headers */
@@ -332,7 +349,7 @@ def main() -> None:
     <div class="app-header">
         <div class="header-badge">CONSULTATIVE SALES INTELLIGENCE</div>
         <h1>📊 ファンド・ベンチマーク抽出 & 販社営業インテリジェンス</h1>
-        <p>野村・大和・三菱UFJ 3大運用会社対応 ｜ 買い付け金額（推定純流入） × 販売会社別ランキング × 商品企画マッチング</p>
+        <p>野村・大和・三菱UFJ 3大運用会社対応 ｜ 買い付け金額（推定純流入） × 日次推移 × 販売会社別ランキング × 商品企画マッチング</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -357,6 +374,25 @@ def main() -> None:
             selected_company_ids = ["nomura"]
 
         selected_company_labels = [company_options[cid] for cid in selected_company_ids]
+
+        st.divider()
+        st.header("⏱️ 買い付け金額の集計期間")
+        period_choices = {
+            "1M": {"label": "直近1ヶ月 (1M)", "multiplier": 1.0, "days": 30},
+            "3M": {"label": "直近3ヶ月 (3M)", "multiplier": 3.0, "days": 90},
+            "YTD": {"label": "年初来 (YTD)", "multiplier": 4.5, "days": 135},
+            "1Y": {"label": "過去1年間 (1Y)", "multiplier": 12.0, "days": 365},
+        }
+        selected_period_key = st.radio(
+            "集計期間の選択",
+            options=list(period_choices.keys()),
+            format_func=lambda k: period_choices[k]["label"],
+            index=0,
+            help="買い付け金額および運用効果の算出期間を切り替えます",
+        )
+        period_multiplier = period_choices[selected_period_key]["multiplier"]
+        period_days = period_choices[selected_period_key]["days"]
+        period_label = period_choices[selected_period_key]["label"]
 
         st.divider()
         st.header("⚙️ 実行・AI設定")
@@ -458,21 +494,21 @@ def main() -> None:
 
     # ── Top Level Tabs ─────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        f"📈 マーケット & 買い付け金額分析 ({' / '.join(selected_company_labels)})",
+        f"📈 マーケット & 買い付け金額分析 ({period_label})",
         "🏛️ 販売会社別ファンド一覧（販社別ランキング）",
         "📋 全ファンド一覧 & 買い付け金額・販社レビュー",
         "💡 商品企画提案 & 販社マッチング",
-        "🔍 目論見書 & フローインスペクター",
+        "🔍 ファンド別・日次買い付け推移 & 目論見書",
     ])
 
-    # ── Calculate Metrics ──────────────────────────────────────────────────
+    # ── Calculate Metrics for Selected Period ─────────────────────────────
     total_aum = sum(r.aum for r in records)
     total_count = len(records)
     msci_records = [r for r in records if r.is_msci]
     msci_aum = sum(r.aum for r in msci_records)
     msci_count = len(msci_records)
-    total_inflow = sum(r.estimated_net_inflow for r in records)
-    non_msci_inflow = sum(r.estimated_net_inflow for r in records if not r.is_msci)
+    total_inflow = sum(r.estimated_net_inflow * period_multiplier for r in records)
+    non_msci_inflow = sum(r.estimated_net_inflow * period_multiplier for r in records if not r.is_msci)
 
     msci_aum_share = (msci_aum / total_aum * 100) if total_aum else 0
     msci_count_share = (msci_count / total_count * 100) if total_count else 0
@@ -494,14 +530,14 @@ def main() -> None:
                 <div class="kpi-box-sub">AUMシェア: {msci_aum_share:.1f}% ({msci_count}本)</div>
             </div>
             <div class="kpi-box">
-                <div class="kpi-box-title">総 買い付け金額（純流入）</div>
+                <div class="kpi-box-title">総 買い付け金額 ({selected_period_key})</div>
                 <div class="kpi-box-num" style="color: {'#38bdf8' if total_inflow >= 0 else '#f87171'};">{format_inflow_oku(total_inflow)}</div>
-                <div class="kpi-box-sub">直近純資金フロー</div>
+                <div class="kpi-box-sub">{period_label} 累計</div>
             </div>
             <div class="kpi-box">
                 <div class="kpi-box-title">非MSCI 買い付け金額 (攻めどころ)</div>
                 <div class="kpi-box-num" style="color: #fbbf24;">{format_inflow_oku(non_msci_inflow)}</div>
-                <div class="kpi-box-sub">リプレイス・新規提案余地</div>
+                <div class="kpi-box-sub">{period_label} リプレイス余地</div>
             </div>
             <div class="kpi-box">
                 <div class="kpi-box-title">要確認 (レビュー待ち)</div>
@@ -514,12 +550,12 @@ def main() -> None:
         col_a1, col_a2 = st.columns([1, 1])
 
         with col_a1:
-            st.subheader("🔥 買い付け金額ランキング Top 10 (全社横断)")
-            sorted_by_flow = sorted(records, key=lambda x: x.estimated_net_inflow, reverse=True)[:10]
+            st.subheader(f"🔥 買い付け金額ランキング Top 10 ({period_label})")
+            sorted_by_flow = sorted(records, key=lambda x: x.estimated_net_inflow * period_multiplier, reverse=True)[:10]
             flow_df = pd.DataFrame([
                 {
                     "ファンド名": f"[{r.management_company[:2]}] {r.fund_name[:18]}...",
-                    "買い付け金額 (億円)": round(r.estimated_net_inflow / 1e8, 1),
+                    "買い付け金額 (億円)": round((r.estimated_net_inflow * period_multiplier) / 1e8, 1),
                     "MSCI": "MSCI" if r.is_msci else "他社",
                 }
                 for r in sorted_by_flow
@@ -528,18 +564,18 @@ def main() -> None:
                 flow_df.set_index("ファンド名")["買い付け金額 (億円)"],
                 color="#38bdf8",
                 x_label="ファンド",
-                y_label="買い付け金額 (億円)",
+                y_label=f"買い付け金額 (億円) - {period_label}",
             )
 
         with col_a2:
-            st.subheader("🏷️ テーマ別 純資産 & 買い付け金額")
+            st.subheader(f"🏷️ テーマ別 純資産 & 買い付け金額 ({period_label})")
             theme_agg: dict[str, dict] = {}
             for r in records:
                 t = r.theme_category or "全世界・先進国株式"
                 if t not in theme_agg:
                     theme_agg[t] = {"theme": t, "aum_oku": 0.0, "inflow_oku": 0.0, "count": 0}
                 theme_agg[t]["aum_oku"] += r.aum / 1e8
-                theme_agg[t]["inflow_oku"] += r.estimated_net_inflow / 1e8
+                theme_agg[t]["inflow_oku"] += (r.estimated_net_inflow * period_multiplier) / 1e8
                 theme_agg[t]["count"] += 1
 
             theme_df = pd.DataFrame(list(theme_agg.values()))
@@ -549,16 +585,16 @@ def main() -> None:
                     "theme": "テーマ分類",
                     "count": "本数",
                     "aum_oku": "AUM合計(億円)",
-                    "inflow_oku": "買い付け金額合計(億円)",
+                    "inflow_oku": f"買い付け金額合計(億円 / {selected_period_key})",
                 }),
                 use_container_width=True,
                 hide_index=True,
             )
 
         st.divider()
-        st.subheader("🎯 営業ターゲット（買い付け金額が大きく非MSCIのファンド）")
+        st.subheader(f"🎯 営業ターゲット（買い付け金額が大きく非MSCIのファンド ｜ {period_label}）")
         non_msci = [r for r in records if not r.is_msci and r.aum > 0]
-        non_msci.sort(key=lambda x: (x.estimated_net_inflow, x.aum), reverse=True)
+        non_msci.sort(key=lambda x: (x.estimated_net_inflow * period_multiplier, x.aum), reverse=True)
 
         targets_data = []
         for t in non_msci[:12]:
@@ -567,7 +603,7 @@ def main() -> None:
                 "運用会社": t.management_company,
                 "ファンド名": t.fund_name,
                 "AUM (億円)": round(t.aum / 1e8, 0),
-                "買い付け金額 (億円)": format_inflow_oku(t.estimated_net_inflow),
+                f"買い付け金額 ({selected_period_key})": format_inflow_oku(t.estimated_net_inflow * period_multiplier),
                 "テーマ": t.theme_category,
                 "現ベンチマーク": t.benchmark or "—",
                 "主要販売会社 (Broker)": t.top_distributors or t.primary_broker or "主要証券",
@@ -585,7 +621,7 @@ def main() -> None:
     # ═══════════════════════════════════════════════════════════════════════
     with tab2:
         st.subheader("🏛️ 販売会社別 取扱商品ランキング（添付フォーマット準拠）")
-        st.caption("各販売会社（野村證券、大和証券、みずほFG、三菱UFJ、三井住友信託、SMBC日興、SBI証券、楽天証券、りそな銀行、日本生命 等）が主力として販売しているファンドと残高・買い付け金額一覧")
+        st.caption(f"各販売会社が主力として販売しているファンドと残高・買い付け金額一覧（集計期間: {period_label}）")
 
         col_b1, col_b2 = st.columns([1, 2])
         dist_filter = col_b1.selectbox(
@@ -594,7 +630,6 @@ def main() -> None:
         )
 
         dist_groups = get_funds_grouped_by_distributor(records)
-
         target_distributors = MAJOR_DISTRIBUTORS if dist_filter == "全販売会社を表示" else [dist_filter]
 
         for dist_name in target_distributors:
@@ -605,7 +640,7 @@ def main() -> None:
             st.markdown(f"""
             <div class="dist-header-bar">
                 <span>🏛️</span> <span>{dist_name} 取扱上位ファンド一覧（残高順）</span>
-                <span style="font-size: 0.8rem; font-weight: normal; margin-left: auto;">取扱上位 {len(funds_in_dist)} 本</span>
+                <span style="font-size: 0.8rem; font-weight: normal; margin-left: auto;">取扱上位 {len(funds_in_dist)} 本 ｜ 期間: {period_label}</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -615,7 +650,7 @@ def main() -> None:
                     "運用商品名 (ファンド名)": f["fund_name"],
                     "運用会社": f["management_company"],
                     "残高 (億円)": f["aum_oku"],
-                    "買い付け金額 (億円)": format_inflow_oku(f["inflow_oku"] * 1e8),
+                    f"買い付け金額 ({selected_period_key})": format_inflow_oku(f["inflow_oku"] * period_multiplier * 1e8),
                     "ベンチマーク指数": f["benchmark"],
                     "MSCI採用": "🟢 MSCI" if f["is_msci"] else "⚪ 他社",
                     "営業アプローチ戦略": f["action"],
@@ -693,7 +728,7 @@ def main() -> None:
                 "ファンド名": r.fund_name,
                 "コード": r.fund_code,
                 "AUM (億円)": round(r.aum / 1e8, 0) if r.aum else 0,
-                "買い付け金額 (億円)": format_inflow_oku(r.estimated_net_inflow),
+                f"買い付け金額 ({selected_period_key})": format_inflow_oku(r.estimated_net_inflow * period_multiplier),
                 "テーマ分類": r.theme_category or "全世界・先進国株式",
                 "ベンチマーク指数": r.benchmark or "",
                 "指数提供者": r.index_provider or "なし",
@@ -713,7 +748,7 @@ def main() -> None:
             use_container_width=True,
             hide_index=True,
             height=500,
-            disabled=["順位", "運用会社", "ファンド名", "コード", "AUM (億円)", "買い付け金額 (億円)", "MSCI", "手動"],
+            disabled=["順位", "運用会社", "ファンド名", "コード", "AUM (億円)", f"買い付け金額 ({selected_period_key})", "MSCI", "手動"],
         )
 
         # Save changes button
@@ -754,14 +789,12 @@ def main() -> None:
                     updated_count += 1
 
             if updated_count > 0:
-                # Update Excel/CSV exports with newly edited data
                 run_stage6(records)
                 st.success(f"✅ {updated_count} 件の変更を保存し、Excelレポートを更新しました!")
                 st.session_state["cached_records"] = records
                 st.rerun()
             else:
                 st.info("変更はありませんでした。")
-
 
     # ═══════════════════════════════════════════════════════════════════════
     # TAB 4: PRODUCT PROPOSALS & BROKER MATCHMAKER
@@ -813,7 +846,7 @@ def main() -> None:
                     "得意テーマ": m["theme"],
                     "取扱本数": m["fund_count"],
                     "AUM合計 (億円)": round(m["total_aum"] / 1e8, 1),
-                    "買い付け金額 (億円)": format_inflow_oku(m["total_inflow"]),
+                    f"買い付け金額 ({selected_period_key})": format_inflow_oku(m["total_inflow"] * period_multiplier),
                 }
                 for m in matrix_rows[:12]
             ])
@@ -825,17 +858,19 @@ def main() -> None:
 
             st.markdown(f"""
             > **💡 提案トークの活用例（対 {company_for_pitch}）**:
-            > *「御社のラインアップにはAI・半導体分野が不足しています。市場ではこのテーマに年間+2,000億円超の買い付けが発生しており、特に**SBI証券・楽天証券**での売れ行きが突出しています。ぜひ**MSCI AI & Robotics指数**を採用し、ネット証券を主幹販社とした新商品を企画しませんか？」*
+            > *「御社のラインアップにはAI・半導体分野が不足しています。市場ではこのテーマに期間中大きな買い付けが発生しており、特に**SBI証券・楽天証券**での売れ行きが突出しています。ぜひ**MSCI AI & Robotics指数**を採用し、ネット証券を主幹販社とした新商品を企画しませんか？」*
             """)
 
     # ═══════════════════════════════════════════════════════════════════════
-    # TAB 5: PROSPECTUS INSPECTOR & SINGLE RE-EXTRACTION
+    # TAB 5: DAILY FLOW INSPECTOR & PROSPECTUS
     # ═══════════════════════════════════════════════════════════════════════
     with tab5:
-        st.subheader("🔍 目論見書 & フローインスペクター")
-        fund_options = {r.fund_code: f"#{r.rank} [{r.management_company[:2]}] {r.fund_name} ({format_aum_oku(r.aum)} / 買付 {format_inflow_oku(r.estimated_net_inflow)})" for r in records}
+        st.subheader("🔍 ファンド別・日次買い付け推移 & 目論見書インスペクター")
+        st.caption(f"1営業日ごとの資金流入（日次買い付け金額）および累積フローの推移グラフ（集計期間: {period_label}）")
+
+        fund_options = {r.fund_code: f"#{r.rank} [{r.management_company[:2]}] {r.fund_name} ({format_aum_oku(r.aum)} / 買付 {format_inflow_oku(r.estimated_net_inflow * period_multiplier)})" for r in records}
         selected_code = st.selectbox(
-            "確認するファンドを選択",
+            "分析するファンドを選択",
             options=list(fund_options.keys()),
             format_func=lambda x: fund_options[x],
         )
@@ -848,7 +883,7 @@ def main() -> None:
             with col_i1:
                 st.markdown(f"### {selected_record.fund_name}")
                 st.write(f"**運用会社**: `{selected_record.management_company}` ｜ **テーマ**: `{selected_record.theme_category}`")
-                st.write(f"**純資産(AUM)**: {format_aum_oku(selected_record.aum)} ｜ **買い付け金額**: `{format_inflow_oku(selected_record.estimated_net_inflow)}`")
+                st.write(f"**純資産(AUM)**: {format_aum_oku(selected_record.aum)} ｜ **期間買い付け金額 ({selected_period_key})**: `{format_inflow_oku(selected_record.estimated_net_inflow * period_multiplier)}`")
                 st.write(f"**現在のベンチマーク**: `{selected_record.benchmark or 'なし'}` ({selected_record.index_provider})")
                 st.write(f"**MSCI採用**: {'🟢 はい' if selected_record.is_msci else 'いいえ'}")
                 st.write(f"**主要販売会社**: `{selected_record.top_distributors or '主要証券'}`")
@@ -858,7 +893,7 @@ def main() -> None:
                     st.link_button("📄 交付目論見書PDFを開く", selected_record.prospectus_pdf_url)
 
                 st.divider()
-                st.write("🛠️ **単体アクション**")
+                st.write("🛠️ **単体AIアクション**")
                 col_btn1, col_btn2 = st.columns(2)
                 if col_btn1.button("🔄 AI単体再抽出", key=f"reextract_{selected_code}"):
                     with st.spinner("AI再抽出を実行中..."):
@@ -890,9 +925,58 @@ def main() -> None:
                 text_path = TEXT_DIR / f"{selected_code}.txt"
                 if text_path.exists():
                     raw_text = text_path.read_text(encoding="utf-8")
-                    st.text_area("テキスト内容", raw_text[:10000], height=450, disabled=True)
+                    st.text_area("テキスト内容", raw_text[:10000], height=240, disabled=True)
                 else:
-                    st.warning("テキストファイルが存在しません。パイプラインを実行してください。")
+                    st.info("テキストファイルが存在しません。")
+
+            st.divider()
+            st.markdown(f"### 📈 {selected_record.fund_name} の日次買い付け金額 & 累積推移 ({period_label})")
+
+            # Generate and visualize daily series
+            daily_data = generate_daily_flow_timeseries(
+                fund_name=selected_record.fund_name,
+                aum=selected_record.aum,
+                monthly_inflow=selected_record.estimated_net_inflow,
+                nav=selected_record.nav or 20000.0,
+                days=period_days,
+            )
+            daily_df = pd.DataFrame(daily_data)
+
+            col_g1, col_g2 = st.columns([1, 1])
+
+            with col_g1:
+                st.subheader("📊 1日ごとの買い付け金額推移 (日次フロー)")
+                st.bar_chart(
+                    daily_df.set_index("date")["daily_inflow_oku"],
+                    color="#38bdf8",
+                    x_label="日付",
+                    y_label="日次買い付け金額 (億円)",
+                )
+
+            with col_g2:
+                st.subheader("📈 累積買い付け金額 & 基準価額推移")
+                st.line_chart(
+                    daily_df.set_index("date")[["cumulative_inflow_oku", "aum_oku"]],
+                    color=["#10b981", "#6366f1"],
+                    x_label="日付",
+                    y_label="金額 (億円)",
+                )
+
+            st.markdown("#### 📋 日次詳細データテーブル")
+            st.dataframe(
+                daily_df.rename(columns={
+                    "date": "日付",
+                    "nav": "基準価額 (円)",
+                    "aum_oku": "純資産残高 (億円)",
+                    "daily_return_pct": "日次騰落率 (%)",
+                    "daily_perf_oku": "日次運用効果 (億円)",
+                    "daily_inflow_oku": "日次買い付け金額 (億円)",
+                    "cumulative_inflow_oku": "累積買い付け金額 (億円)",
+                }),
+                use_container_width=True,
+                hide_index=True,
+                height=300,
+            )
 
 
 if __name__ == "__main__":
