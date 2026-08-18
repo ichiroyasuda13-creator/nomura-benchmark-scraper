@@ -8,14 +8,22 @@ from typing import Optional
 import httpx
 from loguru import logger
 
-from app.config import FUNDS_JSON
-from app.http_client import save_json
+from app.config import DATA_DIR, FUNDS_JSON
+from app.http_client import load_json, save_json
 from app.models import Fund
 
 MUAM_SEARCH_API = "https://www.am.mufg.jp/mukamapi/fund_search/?site_type=1"
+MUAM_MASTER_FALLBACK = DATA_DIR / "muam_funds_master.json"
+
 DEFAULT_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
     "Referer": "https://www.am.mufg.jp/fund/list.html",
+    "Origin": "https://www.am.mufg.jp",
+    "Sec-Fetch-Dest": "empty",
+    "Sec-Fetch-Mode": "cors",
+    "Sec-Fetch-Site": "same-origin",
 }
 
 
@@ -28,13 +36,22 @@ def run_stage1_muam(
     target_out = output_path or FUNDS_JSON
     logger.info("Stage1 (MUAM): Fetching funds from {}", MUAM_SEARCH_API)
 
-    with httpx.Client(headers=DEFAULT_HEADERS, timeout=20.0) as client:
-        resp = client.get(MUAM_SEARCH_API)
-        resp.raise_for_status()
-        data = resp.json()
-
-    raw_funds = data.get("datasets", {}).get("api00001tmCmFndSearchDetailOutDto", [])
-    logger.info("Stage1 (MUAM): Total funds in master: {}", len(raw_funds))
+    raw_funds = []
+    try:
+        with httpx.Client(headers=DEFAULT_HEADERS, timeout=15.0) as client:
+            resp = client.get(MUAM_SEARCH_API)
+            resp.raise_for_status()
+            data = resp.json()
+            raw_funds = data.get("datasets", {}).get("api00001tmCmFndSearchDetailOutDto", [])
+            logger.info("Stage1 (MUAM): Successfully fetched {} funds from live API", len(raw_funds))
+    except Exception as exc:
+        logger.warning("Stage1 (MUAM): Live API request failed ({}). Attempting local fallback...", exc)
+        if MUAM_MASTER_FALLBACK.exists():
+            data = load_json(MUAM_MASTER_FALLBACK, {})
+            raw_funds = data.get("datasets", {}).get("api00001tmCmFndSearchDetailOutDto", [])
+            logger.info("Stage1 (MUAM): Loaded {} funds from bundled master database", len(raw_funds))
+        else:
+            raise RuntimeError(f"MUAM API access failed ({exc}) and no local database found.") from exc
 
     funds: list[Fund] = []
     for item in raw_funds:
@@ -65,7 +82,7 @@ def run_stage1_muam(
     # AUM降順ソート
     funds.sort(key=lambda x: x.aum or 0.0, reverse=True)
     selected = funds[:max_funds]
-    logger.info("Stage1 (MUAM): Selected top {} funds", len(selected))
+    logger.info("Stage1 (MUAM): Selected top {} funds (Max AUM: {:.1f}億円)", len(selected), (selected[0].aum or 0) / 1e8)
 
     save_json(target_out, [f.model_dump(mode="json") for f in selected])
     return selected

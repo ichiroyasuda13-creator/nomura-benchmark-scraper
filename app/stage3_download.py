@@ -27,13 +27,18 @@ def download_pdf(
         return target
 
     client = client or HttpClient()
-    response = client.get(fund.prospectus_pdf_url, timeout=120, stream=True)
-    with target.open("wb") as handle:
-        for chunk in response.iter_content(chunk_size=8192):
-            if chunk:
-                handle.write(chunk)
-    logger.info("Stage3: downloaded {}", target.name)
-    return target
+    try:
+        response = client.get(fund.prospectus_pdf_url, timeout=120, stream=True)
+        with target.open("wb") as handle:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    handle.write(chunk)
+        logger.info("Stage3: downloaded {}", target.name)
+        return target
+    except Exception as exc:
+        logger.warning("Stage3: failed to download PDF for {} ({}): {}", fund.fund_code, fund.prospectus_pdf_url, exc)
+        return None
+
 
 
 def run_stage3(*, force: bool = False, max_workers: int = MAX_WORKERS) -> list[Path]:

@@ -8,14 +8,19 @@ from typing import Optional
 import httpx
 from loguru import logger
 
-from app.config import FUNDS_JSON
-from app.http_client import save_json
+from app.config import DATA_DIR, FUNDS_JSON
+from app.http_client import load_json, save_json
 from app.models import Fund
 
 DAIWA_SEARCH_API = "https://www.daiwa-am.co.jp/include/fund_search.json"
+DAIWA_MASTER_FALLBACK = DATA_DIR / "daiwa_funds_master.json"
+
 DEFAULT_HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
     "Referer": "https://www.daiwa-am.co.jp/funds/search/index.html",
+    "Origin": "https://www.daiwa-am.co.jp",
 }
 
 
@@ -28,13 +33,22 @@ def run_stage1_daiwa(
     target_out = output_path or FUNDS_JSON
     logger.info("Stage1 (Daiwa): Fetching funds from {}", DAIWA_SEARCH_API)
 
-    with httpx.Client(headers=DEFAULT_HEADERS, timeout=20.0) as client:
-        resp = client.get(DAIWA_SEARCH_API)
-        resp.raise_for_status()
-        data = resp.json()
-
-    raw_funds = data.get("fund", [])
-    logger.info("Stage1 (Daiwa): Total funds in master: {}", len(raw_funds))
+    raw_funds = []
+    try:
+        with httpx.Client(headers=DEFAULT_HEADERS, timeout=15.0) as client:
+            resp = client.get(DAIWA_SEARCH_API)
+            resp.raise_for_status()
+            data = resp.json()
+            raw_funds = data.get("fund", [])
+            logger.info("Stage1 (Daiwa): Successfully fetched {} funds from live API", len(raw_funds))
+    except Exception as exc:
+        logger.warning("Stage1 (Daiwa): Live API request failed ({}). Attempting local fallback...", exc)
+        if DAIWA_MASTER_FALLBACK.exists():
+            data = load_json(DAIWA_MASTER_FALLBACK, {})
+            raw_funds = data.get("fund", [])
+            logger.info("Stage1 (Daiwa): Loaded {} funds from bundled master database", len(raw_funds))
+        else:
+            raise RuntimeError(f"Daiwa AM API access failed ({exc}) and no local database found.") from exc
 
     funds: list[Fund] = []
     for item in raw_funds:
