@@ -511,11 +511,11 @@ def main() -> None:
             <div>
                 <h1 class="openbb-title-h1">
                     AM FLOW ANALYSIS
-                    <span class="openbb-title-tag">MSCI INTELLIGENCE // PRO</span>
                 </h1>
             </div>
         </div>
         <div class="openbb-header-meta">
+
             CORE: <span style="color: #00F5D4;">v3.4-PRO</span> ｜ ROUTE: <span style="color: #818cf8;">/am-flow/intelligence</span><br/>
             STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
         </div>
