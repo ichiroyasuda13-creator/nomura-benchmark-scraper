@@ -1,0 +1,77 @@
+"""Stage 1 for Daiwa Asset Management: Fetch funds list sorted by AUM."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Optional
+import httpx
+from loguru import logger
+
+from app.config import FUNDS_JSON
+from app.http_client import save_json
+from app.models import Fund
+
+DAIWA_SEARCH_API = "https://www.daiwa-am.co.jp/include/fund_search.json"
+DEFAULT_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Referer": "https://www.daiwa-am.co.jp/funds/search/index.html",
+}
+
+
+def run_stage1_daiwa(
+    force: bool = False,
+    max_funds: int = 100,
+    output_path: Optional[Path] = None,
+) -> list[Fund]:
+    """大和アセットマネジメントの公式JSONからAUM降順でファンド一覧を取得."""
+    target_out = output_path or FUNDS_JSON
+    logger.info("Stage1 (Daiwa): Fetching funds from {}", DAIWA_SEARCH_API)
+
+    with httpx.Client(headers=DEFAULT_HEADERS, timeout=20.0) as client:
+        resp = client.get(DAIWA_SEARCH_API)
+        resp.raise_for_status()
+        data = resp.json()
+
+    raw_funds = data.get("fund", [])
+    logger.info("Stage1 (Daiwa): Total funds in master: {}", len(raw_funds))
+
+    funds: list[Fund] = []
+    for item in raw_funds:
+        fund_code = str(item.get("fund_code", "")).strip()
+        details = item.get("details", {})
+        if not fund_code or not details:
+            continue
+
+        fund_name = details.get("fund_name", "").strip()
+        net_asset = float(details.get("netasset_value") or 0.0)
+        nav = float(details.get("base_value") or 0.0)
+        is_etf = bool(details.get("etf_flg", False)) or ("ETF" in fund_name) or ("上場投信" in fund_name)
+        detail_link = details.get("fund_detail_link") or f"/funds/detail/{fund_code}/detail_top.html"
+        detail_url = f"https://www.daiwa-am.co.jp{detail_link}"
+
+        doc_link = details.get("mokuromi_report")
+        prospectus_url = (
+            f"https://www.daiwa-am.co.jp{doc_link}"
+            if doc_link
+            else f"https://www.daiwa-am.co.jp/funds/doc_open/fund_doc_open.php?code={fund_code}&type=1"
+        )
+
+        funds.append(Fund(
+            fund_name=fund_name,
+            fund_code=fund_code,
+            nam_code=fund_code,
+            aum=net_asset,
+            nav=nav,
+            is_etf=is_etf,
+            detail_url=detail_url,
+            prospectus_pdf_url=prospectus_url,
+        ))
+
+    # AUM降順ソート
+    funds.sort(key=lambda x: x.aum or 0.0, reverse=True)
+    selected = funds[:max_funds]
+    logger.info("Stage1 (Daiwa): Selected top {} funds", len(selected))
+
+    save_json(target_out, [f.model_dump(mode="json") for f in selected])
+    return selected
