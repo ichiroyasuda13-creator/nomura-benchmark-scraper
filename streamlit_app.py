@@ -26,11 +26,12 @@ import streamlit as st
 
 # ── Page Config (MUST BE FIRST STREAMLIT COMMAND) ───────────────────────────
 st.set_page_config(
-    page_title="OpenBB Terminal ｜ MSCI Fund & Benchmark Intelligence",
-    page_icon="⬡",
+    page_title="AM Flow Analysis ｜ MSCI Fund & Benchmark Intelligence",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 
 # ── Ensure project root is importable ──────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -502,14 +503,14 @@ def load_records_for_companies(company_ids: list[str]) -> list[BenchmarkRecord]:
 
 # ── Main Application ───────────────────────────────────────────────────────
 def main() -> None:
-    # ── OpenBB Terminal Header ─────────────────────────────────────────────
+    # ── Header ─────────────────────────────────────────────────────────────
     st.markdown("""
     <div class="openbb-header">
         <div class="openbb-logo-brand">
-            <div class="openbb-icon-glyph">⬡</div>
+            <div class="openbb-icon-glyph">⚡</div>
             <div>
                 <h1 class="openbb-title-h1">
-                    OPENBB TERMINAL
+                    AM FLOW ANALYSIS
                     <span class="openbb-title-tag">MSCI INTELLIGENCE // PRO</span>
                 </h1>
                 <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 4px;">
@@ -518,11 +519,12 @@ def main() -> None:
             </div>
         </div>
         <div class="openbb-header-meta">
-            CORE: <span style="color: #00F5D4;">v3.4-PRO</span> ｜ ROUTE: <span style="color: #818cf8;">/etf/funds/intelligence</span><br/>
+            CORE: <span style="color: #00F5D4;">v3.4-PRO</span> ｜ ROUTE: <span style="color: #818cf8;">/am-flow/intelligence</span><br/>
             STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span> ｜ TOKYO DESK
         </div>
     </div>
     """, unsafe_allow_html=True)
+
 
     # ── Sidebar Configurations ─────────────────────────────────────────────
     with st.sidebar:
@@ -665,12 +667,13 @@ def main() -> None:
     active_managers_str = " ".join([f"--{cid}" for cid in selected_company_ids])
     st.markdown(f"""
     <div class="cli-bar">
-        <span class="cli-prompt">> /openbb/funds/flow</span>
+        <span class="cli-prompt">> /am-flow/funds/intelligence</span>
         <span style="color: #00F5D4;">--period={selected_period_key}</span>
         <span style="color: #818cf8;">{active_managers_str}</span>
         <span style="color: #94a3b8;">--total-funds={len(records)}</span>
     </div>
     """, unsafe_allow_html=True)
+
 
     # ── Top Level Tabs ─────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -887,7 +890,7 @@ def main() -> None:
                     col_d1.download_button(
                         "📊 Excel (.xlsx)",
                         f.read(),
-                        file_name="openbb_fund_benchmark_broker_intelligence.xlsx",
+                        file_name="am_flow_analysis_intelligence.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
             if csv_path.exists():
@@ -895,9 +898,10 @@ def main() -> None:
                     col_d2.download_button(
                         "📄 CSV (.csv)",
                         f.read(),
-                        file_name="openbb_fund_benchmarks.csv",
+                        file_name="am_flow_analysis_benchmarks.csv",
                         mime="text/csv",
                     )
+
 
         # Filter records
         filtered_records = records
