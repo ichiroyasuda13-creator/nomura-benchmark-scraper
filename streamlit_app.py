@@ -1,9 +1,10 @@
 """Streamlit web app for Multi-Asset Management Benchmark Scraper & Intelligence.
 
-Institutional Terminal Grade UI & Intelligence Platform:
+OpenBB Terminal Pro Theme & Architecture:
+- Aesthetic: OpenBB Terminal Dark Grid & Ambient Glow (`#0b0d13`, `#00F5D4` Teal, `#8B5CF6` Indigo, `#FFB703` Amber)
 - Multi-Asset Managers: 野村アセット, 大和アセット, 三菱UFJアセット (1社 / 2社 / 3社同時統合分析)
-- 期間切り替え機能: 直近1ヶ月 ｜ 直近3ヶ月 ｜ 年初来 ｜ 過去1年間
-- ファンド別 日次買い付け推移 & 累積フロー推移インタラクティブ可視化
+- 期間切り替え機能: 直近1ヶ月 (1M) ｜ 直近3ヶ月 (3M) ｜ 年初来 (YTD) ｜ 過去1年間 (1Y)
+- ファンド別 日次買い付け推移 & 累積フロー推移インタラクティブ可視化 (OpenBB Terminal Style)
 - Distributor-by-Distributor Fund Rankings (添付雑誌DCトレンドフォーマット完全再現)
 - 買い付け金額（推定純流入） & 運用効果の精密計算
 - Broker & Distributor Intelligence (主要販売会社 & 販社別売れ行きマトリクス)
@@ -25,8 +26,8 @@ import streamlit as st
 
 # ── Page Config (MUST BE FIRST STREAMLIT COMMAND) ───────────────────────────
 st.set_page_config(
-    page_title="MSCI INTELLIGENCE ｜ ファンド・ベンチマーク抽出 & 販社営業インテリジェンス",
-    page_icon="⚡",
+    page_title="OpenBB Terminal ｜ MSCI Fund & Benchmark Intelligence",
+    page_icon="⬡",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -81,191 +82,283 @@ except Exception as _import_err:
     st.stop()
 
 
-# ── Custom Institutional Terminal CSS ──────────────────────────────────────
+# ── OpenBB Terminal Signature CSS ──────────────────────────────────────────
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+JP:wght@300;400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+
+    /* Global Root Variables */
+    :root {
+        --bb-bg-base: #0a0d14;
+        --bb-bg-card: #10141e;
+        --bb-bg-card-hover: #151a27;
+        --bb-border: #1e2638;
+        --bb-border-active: #00F5D4;
+        --bb-teal: #00F5D4;
+        --bb-teal-glow: rgba(0, 245, 212, 0.15);
+        --bb-indigo: #818cf8;
+        --bb-amber: #FBBF24;
+        --bb-crimson: #F43F5E;
+        --bb-emerald: #10B981;
+        --bb-text-main: #f1f5f9;
+        --bb-text-muted: #94a3b8;
+        --bb-text-sub: #64748b;
+    }
 
     html, body, [class*="css"] {
-        font-family: 'Inter', 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-family: 'Plus Jakarta Sans', 'Noto Sans JP', sans-serif;
     }
 
-    /* Global Background & Contrast */
+    /* OpenBB Space Ambient Glow Background */
     .stApp {
-        background-color: #080c14;
-        color: #e2e8f0;
+        background-color: var(--bb-bg-base);
+        background-image: 
+            radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.08) 0%, transparent 45%),
+            radial-gradient(circle at 85% 20%, rgba(0, 245, 212, 0.06) 0%, transparent 40%),
+            radial-gradient(circle at 50% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
+        background-attachment: fixed;
+        color: var(--bb-text-main);
     }
 
-    /* Header Styling */
-    .terminal-header {
-        background: linear-gradient(180deg, rgba(15, 23, 42, 0.9) 0%, rgba(10, 15, 29, 0.6) 100%);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 16px;
-        padding: 1.5rem 2rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        backdrop-filter: blur(16px);
+    /* OpenBB Top Terminal Header */
+    .openbb-header {
+        background: linear-gradient(180deg, rgba(16, 20, 30, 0.85) 0%, rgba(10, 13, 20, 0.95) 100%);
+        border: 1px solid var(--bb-border);
+        border-radius: 12px;
+        padding: 1.2rem 1.8rem;
+        margin-bottom: 1.4rem;
+        box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(20px);
         display: flex;
         justify-content: space-between;
         align-items: center;
-    }
-    .header-left-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        font-size: 0.72rem;
-        font-weight: 800;
-        letter-spacing: 0.12em;
-        text-transform: uppercase;
-        padding: 4px 14px;
-        border-radius: 9999px;
-        background: rgba(99, 102, 241, 0.12);
-        color: #a5b4fc;
-        border: 1px solid rgba(99, 102, 241, 0.35);
-        margin-bottom: 8px;
-    }
-    .header-title-text {
-        font-size: 1.95rem;
-        font-weight: 800;
-        letter-spacing: -0.02em;
-        background: linear-gradient(135deg, #ffffff 30%, #cbd5e1 70%, #818cf8 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin: 0 0 6px 0;
-        line-height: 1.2;
-    }
-    .header-sub-text {
-        color: #94a3b8;
-        font-size: 0.88rem;
-        margin: 0;
-    }
-
-    /* KPI Metrics Grid */
-    .kpi-grid {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 0.9rem;
-        margin-bottom: 1.5rem;
-    }
-    .kpi-card {
-        background: rgba(15, 23, 42, 0.75);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 14px;
-        padding: 1.2rem 1rem;
-        text-align: center;
-        box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
-        backdrop-filter: blur(12px);
         position: relative;
         overflow: hidden;
-        transition: transform 0.2s ease, border-color 0.2s ease;
     }
-    .kpi-card:hover {
-        transform: translateY(-2px);
-        border-color: rgba(255, 255, 255, 0.2);
+    .openbb-header::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 2px;
+        background: linear-gradient(90deg, #00F5D4, #818cf8, #FBBF24, transparent);
     }
-    .kpi-card-indigo { border-top: 3px solid #6366f1; }
-    .kpi-card-emerald { border-top: 3px solid #10b981; }
-    .kpi-card-cyan { border-top: 3px solid #06b6d4; }
-    .kpi-card-amber { border-top: 3px solid #f59e0b; }
-    .kpi-card-slate { border-top: 3px solid #94a3b8; }
-
-    .kpi-label {
-        font-size: 0.72rem;
-        color: #94a3b8;
-        text-transform: uppercase;
+    .openbb-logo-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .openbb-icon-glyph {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.6rem;
+        font-weight: 800;
+        color: #00F5D4;
+        background: rgba(0, 245, 212, 0.1);
+        border: 1px solid rgba(0, 245, 212, 0.3);
+        padding: 4px 10px;
+        border-radius: 8px;
+        letter-spacing: -0.05em;
+    }
+    .openbb-title-h1 {
+        font-size: 1.7rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        color: #ffffff;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .openbb-title-tag {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.70rem;
         font-weight: 700;
-        letter-spacing: 0.05em;
+        padding: 2px 8px;
+        border-radius: 4px;
+        background: rgba(0, 245, 212, 0.12);
+        color: #00F5D4;
+        border: 1px solid rgba(0, 245, 212, 0.3);
+    }
+    .openbb-header-meta {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.78rem;
+        color: var(--bb-text-muted);
+        text-align: right;
+        line-height: 1.6;
+    }
+
+    /* OpenBB Terminal CLI Command Line Bar */
+    .cli-bar {
+        background: #0d111a;
+        border: 1px solid var(--bb-border);
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.82rem;
+        color: var(--bb-teal);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 1.2rem;
+    }
+    .cli-prompt {
+        color: var(--bb-text-sub);
+    }
+
+    /* OpenBB Terminal KPI Widgets Grid */
+    .bb-kpi-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 0.85rem;
+        margin-bottom: 1.4rem;
+    }
+    .bb-kpi-widget {
+        background: var(--bb-bg-card);
+        border: 1px solid var(--bb-border);
+        border-radius: 10px;
+        padding: 1.1rem 0.9rem;
+        text-align: left;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.2s ease;
+    }
+    .bb-kpi-widget:hover {
+        background: var(--bb-bg-card-hover);
+        border-color: rgba(0, 245, 212, 0.4);
+        transform: translateY(-2px);
+    }
+    .bb-kpi-widget-topline {
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 2px;
+    }
+    .topline-teal { background: #00F5D4; }
+    .topline-emerald { background: #10B981; }
+    .topline-indigo { background: #818cf8; }
+    .topline-amber { background: #FBBF24; }
+    .topline-slate { background: #64748b; }
+
+    .bb-kpi-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
         margin-bottom: 6px;
     }
-    .kpi-value {
+    .bb-kpi-label {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 1.85rem;
+        font-size: 0.70rem;
+        font-weight: 700;
+        color: var(--bb-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+    .bb-kpi-tag {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        padding: 1px 6px;
+        border-radius: 3px;
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--bb-text-sub);
+    }
+    .bb-kpi-num {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 1.8rem;
         font-weight: 800;
-        margin: 2px 0 6px 0;
+        color: #ffffff;
+        margin: 2px 0 4px 0;
         letter-spacing: -0.03em;
     }
-    .kpi-sub {
-        font-size: 0.76rem;
-        color: #64748b;
+    .bb-kpi-footer {
+        font-size: 0.75rem;
+        color: var(--bb-text-sub);
         font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 4px;
     }
 
-    /* Distributor Section Styling */
-    .dist-banner-header {
-        background: linear-gradient(90deg, #1e293b 0%, #0f172a 100%);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-left: 4px solid #38bdf8;
-        color: #f8fafc;
+    /* OpenBB Section Banner */
+    .bb-section-banner {
+        background: linear-gradient(90deg, #131824 0%, #0d111a 100%);
+        border: 1px solid var(--bb-border);
+        border-left: 3px solid var(--bb-teal);
+        border-radius: 6px;
+        padding: 8px 14px;
+        margin: 1.4rem 0 0.8rem 0;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.90rem;
         font-weight: 700;
-        font-size: 1.05rem;
-        padding: 10px 18px;
-        border-radius: 8px;
-        margin: 1.5rem 0 0.8rem 0;
+        color: #ffffff;
         display: flex;
         align-items: center;
         justify-content: space-between;
     }
 
-    /* Product Proposal Cards */
-    .proposal-card-box {
-        background: rgba(15, 23, 42, 0.7);
-        border: 1px solid rgba(255, 255, 255, 0.09);
-        border-radius: 12px;
-        padding: 1.3rem;
-        margin-bottom: 1.1rem;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+    /* OpenBB Proposal Pitch Box */
+    .bb-pitch-box {
+        background: var(--bb-bg-card);
+        border: 1px solid var(--bb-border);
+        border-radius: 10px;
+        padding: 1.2rem;
+        margin-bottom: 1rem;
+        transition: border-color 0.2s ease;
     }
-    .proposal-pill-gap {
-        background: rgba(239, 68, 68, 0.15);
-        color: #f87171;
-        border: 1px solid rgba(239, 68, 68, 0.3);
-        padding: 3px 10px;
-        border-radius: 6px;
-        font-size: 0.75rem;
+    .bb-pitch-box:hover {
+        border-color: rgba(0, 245, 212, 0.3);
+    }
+    .bb-badge-gap {
+        font-family: 'JetBrains Mono', monospace;
+        background: rgba(244, 63, 94, 0.15);
+        color: #fb7185;
+        border: 1px solid rgba(244, 63, 94, 0.3);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.72rem;
         font-weight: 700;
     }
-    .proposal-pill-ok {
+    .bb-badge-ok {
+        font-family: 'JetBrains Mono', monospace;
         background: rgba(16, 185, 129, 0.15);
         color: #34d399;
         border: 1px solid rgba(16, 185, 129, 0.3);
-        padding: 3px 10px;
-        border-radius: 6px;
-        font-size: 0.75rem;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.72rem;
         font-weight: 700;
     }
 
-    /* Sidebar Styling */
+    /* OpenBB Terminal Sidebar */
     section[data-testid="stSidebar"] {
-        background-color: #0b101b;
-        border-right: 1px solid rgba(255, 255, 255, 0.06);
+        background-color: #0b0e17;
+        border-right: 1px solid var(--bb-border);
     }
 
-    /* Tabs Styling */
+    /* OpenBB Tabs */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 8px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        padding-bottom: 4px;
+        gap: 6px;
+        border-bottom: 1px solid var(--bb-border);
+        padding-bottom: 2px;
         margin-bottom: 1.2rem;
     }
     .stTabs [data-baseweb="tab"] {
+        font-family: 'JetBrains Mono', monospace;
         background-color: transparent;
-        border-radius: 8px 8px 0 0;
-        color: #94a3b8;
+        border-radius: 6px 6px 0 0;
+        color: var(--bb-text-muted);
         font-weight: 600;
-        font-size: 0.92rem;
+        font-size: 0.88rem;
         padding: 8px 16px;
     }
     .stTabs [aria-selected="true"] {
-        color: #38bdf8 !important;
-        background-color: rgba(56, 189, 248, 0.08) !important;
-        border-bottom: 2px solid #38bdf8 !important;
+        color: var(--bb-teal) !important;
+        background-color: rgba(0, 245, 212, 0.08) !important;
+        border-bottom: 2px solid var(--bb-teal) !important;
     }
 
-    /* Streamlit dataframe styling */
+    /* Tables & Editor */
     div[data-testid="stDataFrame"] {
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 10px;
-        overflow: hidden;
+        border: 1px solid var(--bb-border);
+        border-radius: 8px;
+        background-color: var(--bb-bg-card);
     }
 
     #MainMenu { visibility: hidden; }
@@ -302,7 +395,7 @@ def run_pipeline_for_company(
     company_name = company_names.get(company_id, "野村アセットマネジメント")
 
     if log_func:
-        log_func(f"🚀 {company_name} のパイプライン開始 (AUM上位 {max_funds}本)")
+        log_func(f"🚀 [INIT] {company_name} パイプライン起動 (AUM上位 {max_funds}本)")
 
     # Smart Cache Sync (Instantaneous loading if pre-extracted data exists)
     comp_json = DATA_DIR / f"{company_id}_benchmarks.json"
@@ -320,7 +413,7 @@ def run_pipeline_for_company(
                     r.primary_broker = prim_s
                     r.sales_pitch_action = act_s
             if log_func:
-                log_func(f"⚡ {company_name}: キャッシュから {len(recs)} 本を即時読み込み・最新指標同期完了")
+                log_func(f"⚡ [CACHE_HIT] {company_name}: {len(recs)} 本のマスターデータを即時同期")
             return recs
 
     # Live Safe Pipeline Execution
@@ -334,23 +427,23 @@ def run_pipeline_for_company(
     else:
         funds = run_stage1(force=force, max_funds=max_funds)
     if log_func:
-        log_func(f"Stage 1 完了: {len(funds)} 本のファンド情報取得")
+        log_func(f"Stage 1 OK: {len(funds)} 本のファンドリスト取得")
 
     # Stage 2
     if company_id not in ("daiwa", "muam"):
         run_stage2(force=force, max_workers=safe_workers)
     if log_func:
-        log_func("Stage 2 完了: 交付目論見書URL解決")
+        log_func("Stage 2 OK: 交付目論見書URL解決")
 
     # Stage 3
     run_stage3(force=force, max_workers=safe_workers)
     if log_func:
-        log_func("Stage 3 完了: PDFダウンロード完了")
+        log_func("Stage 3 OK: 目論見書PDFダウンロード")
 
     # Stage 4
     run_stage4(force=force, allow_ocr=False, max_workers=safe_workers)
     if log_func:
-        log_func("Stage 4 完了: テキスト抽出完了")
+        log_func("Stage 4 OK: テキスト抽出完了")
 
     # Stage 5
     def _stage5_cb(done: int, total_cnt: int, item_name: str) -> None:
@@ -370,7 +463,7 @@ def run_pipeline_for_company(
 
     save_json(comp_json, [r.model_dump(mode="json") for r in records])
     if log_func:
-        log_func(f"✅ {company_name} 完了: {len(records)} 本の分析完了")
+        log_func(f"✅ [SUCCESS] {company_name} 完了: {len(records)} 本抽出完了")
 
     return records
 
@@ -409,31 +502,38 @@ def load_records_for_companies(company_ids: list[str]) -> list[BenchmarkRecord]:
 
 # ── Main Application ───────────────────────────────────────────────────────
 def main() -> None:
-    # ── Executive Terminal Header ──────────────────────────────────────────
+    # ── OpenBB Terminal Header ─────────────────────────────────────────────
     st.markdown("""
-    <div class="terminal-header">
-        <div>
-            <div class="header-left-badge">⚡ MSCI CLIENT INTELLIGENCE & MATCHMAKER</div>
-            <h1 class="header-title-text">ファンド・ベンチマーク抽出 & 販社営業インテリジェンス</h1>
-            <p class="header-sub-text">野村・大和・三菱UFJ 3大運用会社横断 ｜ 買い付け金額（純流入） × 日次推移 × 販売会社別ランキング × 商品企画マッチング</p>
+    <div class="openbb-header">
+        <div class="openbb-logo-brand">
+            <div class="openbb-icon-glyph">⬡</div>
+            <div>
+                <h1 class="openbb-title-h1">
+                    OPENBB TERMINAL
+                    <span class="openbb-title-tag">MSCI INTELLIGENCE // PRO</span>
+                </h1>
+                <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 4px;">
+                    3大アセットマネジメント（野村・大和・三菱UFJ）ベンチマーク抽出 & 販社営業マッチメーカー
+                </div>
+            </div>
         </div>
-        <div style="text-align: right; color: #64748b; font-size: 0.75rem; font-family: 'JetBrains Mono', monospace;">
-            DATA STATUS: <span style="color: #10b981; font-weight: 700;">● LIVE ACTIVE</span><br/>
-            PLATFORM: MULTI-ASSET V3.0
+        <div class="openbb-header-meta">
+            CORE: <span style="color: #00F5D4;">v3.4-PRO</span> ｜ ROUTE: <span style="color: #818cf8;">/etf/funds/intelligence</span><br/>
+            STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span> ｜ TOKYO DESK
         </div>
     </div>
     """, unsafe_allow_html=True)
 
     # ── Sidebar Configurations ─────────────────────────────────────────────
     with st.sidebar:
-        st.markdown("### 🏢 対象運用会社")
+        st.markdown("### ⬡ ASSET MANAGERS")
         company_options = {
             "nomura": "野村アセットマネジメント",
             "daiwa": "大和アセットマネジメント",
             "muam": "三菱UFJアセットマネジメント",
         }
         selected_company_ids = st.multiselect(
-            "分析・実行対象（1社〜3社一括選択可能）",
+            "対象運用会社（1〜3社 一括選択）",
             options=list(company_options.keys()),
             default=["nomura", "daiwa", "muam"],
             format_func=lambda x: company_options[x],
@@ -447,7 +547,7 @@ def main() -> None:
         selected_company_labels = [company_options[cid] for cid in selected_company_ids]
 
         st.divider()
-        st.markdown("### ⏱️ 買い付け金額の集計期間")
+        st.markdown("### ⏱️ TIME HORIZON")
         period_choices = {
             "1M": {"label": "直近1ヶ月 (1M)", "multiplier": 1.0, "days": 30},
             "3M": {"label": "直近3ヶ月 (3M)", "multiplier": 3.0, "days": 90},
@@ -466,15 +566,15 @@ def main() -> None:
         period_label = period_choices[selected_period_key]["label"]
 
         st.divider()
-        st.markdown("### ⚙️ 実行・AI設定")
+        st.markdown("### ⚙️ TERMINAL ENGINE")
 
         available_providers = get_available_providers()
-        prov_options = {"auto": "自動選択 (設定キー優先)"}
+        prov_options = {"auto": "AUTO (Claude / Gemini / GPT)"}
         for p in available_providers:
             prov_options[p["id"]] = f"{p['name']} ({p['model']})"
 
         selected_provider_key = st.selectbox(
-            "🤖 LLMプロバイダー",
+            "🤖 LLM EXTRACTOR",
             options=list(prov_options.keys()),
             format_func=lambda x: prov_options[x],
             help="ベンチマーク抽出に使用するAIモデルを選択",
@@ -482,7 +582,7 @@ def main() -> None:
         provider_arg = None if selected_provider_key == "auto" else selected_provider_key
 
         max_funds_per_company = st.slider(
-            "1社あたりの取得ファンド数 (AUM順)",
+            "Top N Funds per Manager",
             min_value=5,
             max_value=200,
             value=50,
@@ -490,30 +590,30 @@ def main() -> None:
         )
 
         workers = st.slider(
-            "並行ワーカ数",
+            "Concurrent Workers",
             min_value=1,
             max_value=10,
             value=5,
             help="ネットワーク並行処理ワーカ数",
         )
 
-        use_llm = st.toggle("LLM抽出を有効化", value=True)
-        force = st.toggle("キャッシュ無視で全再取得", value=False)
+        use_llm = st.toggle("LLM Inference Engine", value=True)
+        force = st.toggle("Force Re-Scrape (Bypass Cache)", value=False)
 
         st.divider()
-        button_label = f"🚀 選択した運用会社（{len(selected_company_ids)}社）を一括実行"
+        button_label = f"🚀 RUN PIPELINE ({len(selected_company_ids)} MANAGERS)"
         run_clicked = st.button(button_label, type="primary", use_container_width=True)
 
         st.divider()
-        st.markdown("### 🔑 API Key 接続状態")
+        st.markdown("### 🔑 API GATEWAY STATUS")
         col_k1, col_k2 = st.columns(2)
-        col_k1.caption(f"Claude: {'🟢 接続' if ANTHROPIC_API_KEY else '⚪ 未設定'}")
-        col_k2.caption(f"Gemini: {'🟢 接続' if GEMINI_API_KEY else '⚪ 未設定'}")
-        col_k1.caption(f"OpenAI: {'🟢 接続' if OPENAI_API_KEY else '⚪ 未設定'}")
+        col_k1.caption(f"Claude: {'🟢 READY' if ANTHROPIC_API_KEY else '⚪ OFF'}")
+        col_k2.caption(f"Gemini: {'🟢 READY' if GEMINI_API_KEY else '⚪ OFF'}")
+        col_k1.caption(f"OpenAI: {'🟢 READY' if OPENAI_API_KEY else '⚪ OFF'}")
 
     # ── Run pipeline trigger ───────────────────────────────────────────────
     if run_clicked:
-        prog_bar = st.progress(0, text="パイプライン初期化中...")
+        prog_bar = st.progress(0, text="Initializing OpenBB Pipeline...")
         status_text = st.empty()
         log_area = st.empty()
         logs: list[str] = []
@@ -528,7 +628,7 @@ def main() -> None:
         all_executed_records = []
         for c_idx, cid in enumerate(selected_company_ids, start=1):
             c_name = company_options[cid]
-            status_text.info(f"[{c_idx}/{len(selected_company_ids)}] {c_name} を実行中...")
+            status_text.info(f"[{c_idx}/{len(selected_company_ids)}] Processing {c_name}...")
             try:
                 c_records = run_pipeline_for_company(
                     company_id=cid,
@@ -542,12 +642,12 @@ def main() -> None:
                 )
                 all_executed_records.extend(c_records)
             except Exception as e:
-                st.error(f"❌ {c_name} の実行エラー: {e}")
+                st.error(f"❌ {c_name} Pipeline Error: {e}")
 
         if all_executed_records:
             run_stage6(all_executed_records)
-            prog_bar.progress(1.0, text="✅ 全社のパイプラインが完了しました!")
-            status_text.success(f"✅ 選択された {len(selected_company_ids)} 社（合計 {len(all_executed_records)}本）の実行が正常に完了しました!")
+            prog_bar.progress(1.0, text="✅ Pipeline Execution Complete!")
+            status_text.success(f"✅ Executed {len(selected_company_ids)} Managers ({len(all_executed_records)} Total Funds Analyzed)")
             st.session_state["cached_records"] = all_executed_records
 
     # Load data for selected companies
@@ -558,16 +658,27 @@ def main() -> None:
             st.session_state["cached_records"] = records
 
     if not records:
-        st.info("💡 サイドバーの「一括実行」ボタンをクリックしてデータを取得してください。")
+        st.info("💡 サイドバーの「RUN PIPELINE」ボタンをクリックしてデータを取得してください。")
         return
+
+    # ── CLI Command Bar ────────────────────────────────────────────────────
+    active_managers_str = " ".join([f"--{cid}" for cid in selected_company_ids])
+    st.markdown(f"""
+    <div class="cli-bar">
+        <span class="cli-prompt">> /openbb/funds/flow</span>
+        <span style="color: #00F5D4;">--period={selected_period_key}</span>
+        <span style="color: #818cf8;">{active_managers_str}</span>
+        <span style="color: #94a3b8;">--total-funds={len(records)}</span>
+    </div>
+    """, unsafe_allow_html=True)
 
     # ── Top Level Tabs ─────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        f"📈 マーケット & 買い付け金額分析 ({period_label})",
-        "🏛️ 販売会社別ファンド一覧（販社別ランキング）",
-        "📋 全ファンド一覧 & 買い付け金額・販社レビュー",
-        "💡 商品企画提案 & 販社マッチング",
-        "🔍 ファンド別・日次買い付け推移 & 目論見書",
+        f"📈 MARKET OVERVIEW ({period_label})",
+        "🏛️ DISTRIBUTOR RANKINGS",
+        "📋 ALL FUNDS MATRIX",
+        "💡 PROPOSAL MATCHMAKER",
+        "🔍 DAILY FLOW & PROSPECTUS",
     ])
 
     # ── Calculate Metrics for Selected Period ─────────────────────────────
@@ -587,31 +698,51 @@ def main() -> None:
     # ═══════════════════════════════════════════════════════════════════════
     with tab1:
         st.markdown(f"""
-        <div class="kpi-grid">
-            <div class="kpi-card kpi-card-indigo">
-                <div class="kpi-label">総ファンド数 ({len(selected_company_ids)}社合計)</div>
-                <div class="kpi-value">{total_count}</div>
-                <div class="kpi-sub">AUM合計: {total_aum / 1e12:.2f} 兆円</div>
+        <div class="bb-kpi-grid">
+            <div class="bb-kpi-widget">
+                <div class="bb-kpi-widget-topline topline-indigo"></div>
+                <div class="bb-kpi-header">
+                    <span class="bb-kpi-label">TOTAL UNIVERSE</span>
+                    <span class="bb-kpi-tag">{len(selected_company_ids)} MANAGERS</span>
+                </div>
+                <div class="bb-kpi-num">{total_count}</div>
+                <div class="bb-kpi-footer">AUM: {total_aum / 1e12:.2f} 兆円</div>
             </div>
-            <div class="kpi-card kpi-card-emerald">
-                <div class="kpi-label">MSCI 採用 AUM</div>
-                <div class="kpi-value" style="color: #34d399;">{msci_aum / 1e12:.2f} 兆円</div>
-                <div class="kpi-sub">AUMシェア: {msci_aum_share:.1f}% ({msci_count}本)</div>
+            <div class="bb-kpi-widget">
+                <div class="bb-kpi-widget-topline topline-teal"></div>
+                <div class="bb-kpi-header">
+                    <span class="bb-kpi-label">MSCI ADOPTED AUM</span>
+                    <span class="bb-kpi-tag">{msci_count} FUNDS</span>
+                </div>
+                <div class="bb-kpi-num" style="color: #00F5D4;">{msci_aum / 1e12:.2f} <span style="font-size: 1.1rem;">兆円</span></div>
+                <div class="bb-kpi-footer" style="color: #00F5D4;">SHARE: {msci_aum_share:.1f}%</div>
             </div>
-            <div class="kpi-card kpi-card-cyan">
-                <div class="kpi-label">総 買い付け金額 ({selected_period_key})</div>
-                <div class="kpi-value" style="color: {'#38bdf8' if total_inflow >= 0 else '#f87171'};">{format_inflow_oku(total_inflow)}</div>
-                <div class="kpi-sub">{period_label} 累計</div>
+            <div class="bb-kpi-widget">
+                <div class="bb-kpi-widget-topline topline-emerald"></div>
+                <div class="bb-kpi-header">
+                    <span class="bb-kpi-label">TOTAL NET FLOW ({selected_period_key})</span>
+                    <span class="bb-kpi-tag">BUY VOLUME</span>
+                </div>
+                <div class="bb-kpi-num" style="color: {'#34d399' if total_inflow >= 0 else '#f43f5e'};">{format_inflow_oku(total_inflow)}</div>
+                <div class="bb-kpi-footer">{period_label} 累計</div>
             </div>
-            <div class="kpi-card kpi-card-amber">
-                <div class="kpi-label">非MSCI 買い付け金額 (攻めどころ)</div>
-                <div class="kpi-value" style="color: #fbbf24;">{format_inflow_oku(non_msci_inflow)}</div>
-                <div class="kpi-sub">{period_label} リプレイス余地</div>
+            <div class="bb-kpi-widget">
+                <div class="bb-kpi-widget-topline topline-amber"></div>
+                <div class="bb-kpi-header">
+                    <span class="bb-kpi-label">NON-MSCI TARGET FLOW</span>
+                    <span class="bb-kpi-tag">OPPORTUNITY</span>
+                </div>
+                <div class="bb-kpi-num" style="color: #FBBF24;">{format_inflow_oku(non_msci_inflow)}</div>
+                <div class="bb-kpi-footer" style="color: #FBBF24;">リプレイス余地</div>
             </div>
-            <div class="kpi-card kpi-card-slate">
-                <div class="kpi-label">要確認 (レビュー待ち)</div>
-                <div class="kpi-value" style="color: #cbd5e1;">{sum(1 for r in records if r.needs_review)}</div>
-                <div class="kpi-sub">要レビュー件数</div>
+            <div class="bb-kpi-widget">
+                <div class="bb-kpi-widget-topline topline-slate"></div>
+                <div class="bb-kpi-header">
+                    <span class="bb-kpi-label">REVIEW QUEUE</span>
+                    <span class="bb-kpi-tag">HUMAN-IN-LOOP</span>
+                </div>
+                <div class="bb-kpi-num" style="color: #cbd5e1;">{sum(1 for r in records if r.needs_review)}</div>
+                <div class="bb-kpi-footer">要レビュー件数</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -619,7 +750,7 @@ def main() -> None:
         col_a1, col_a2 = st.columns([1, 1])
 
         with col_a1:
-            st.markdown(f"#### 🔥 買い付け金額ランキング Top 10 ({period_label})")
+            st.markdown(f"#### ⚡ TOP 10 NET FLOW LEADERS ({period_label})")
             sorted_by_flow = sorted(records, key=lambda x: x.estimated_net_inflow * period_multiplier, reverse=True)[:10]
             flow_df = pd.DataFrame([
                 {
@@ -631,13 +762,13 @@ def main() -> None:
             ])
             st.bar_chart(
                 flow_df.set_index("ファンド名")["買い付け金額 (億円)"],
-                color="#38bdf8",
+                color="#00F5D4",
                 x_label="ファンド",
                 y_label=f"買い付け金額 (億円) - {period_label}",
             )
 
         with col_a2:
-            st.markdown(f"#### 🏷️ テーマ別 純資産 & 買い付け金額 ({period_label})")
+            st.markdown(f"#### 🏷️ THEME BREAKDOWN & INFLOW VELOCITY ({period_label})")
             theme_agg: dict[str, dict] = {}
             for r in records:
                 t = r.theme_category or "全世界・先進国株式"
@@ -661,7 +792,7 @@ def main() -> None:
             )
 
         st.divider()
-        st.markdown(f"#### 🎯 営業ターゲット（買い付け金額が大きく非MSCIのファンド ｜ {period_label}）")
+        st.markdown(f"#### 🎯 PRIME SALES TARGETS (Non-MSCI with High Inflow ｜ {period_label})")
         non_msci = [r for r in records if not r.is_msci and r.aum > 0]
         non_msci.sort(key=lambda x: (x.estimated_net_inflow * period_multiplier, x.aum), reverse=True)
 
@@ -676,7 +807,7 @@ def main() -> None:
                 "テーマ": t.theme_category,
                 "現ベンチマーク": t.benchmark or "—",
                 "主要販売会社 (Broker)": t.top_distributors or t.primary_broker or "主要証券",
-                "営業アクション (Who to Call)": t.sales_pitch_action or "🎯 アプローチ対象",
+                "営業アクション (Target Playbook)": t.sales_pitch_action or "🎯 アプローチ対象",
             })
         targets_df = pd.DataFrame(targets_data)
         st.dataframe(
@@ -689,12 +820,12 @@ def main() -> None:
     # TAB 2: DISTRIBUTOR RANKINGS (ATTACHED FORMAT REPLICATION)
     # ═══════════════════════════════════════════════════════════════════════
     with tab2:
-        st.markdown("### 🏛️ 販売会社別 取扱商品ランキング（添付フォーマット準拠）")
+        st.markdown("### 🏛️ 販売会社別 取扱商品ランキング（添付雑誌DCトレンドフォーマット準拠）")
         st.caption(f"各販売会社が主力として販売しているファンドと残高・買い付け金額一覧（集計期間: {period_label}）")
 
         col_b1, col_b2 = st.columns([1, 2])
         dist_filter = col_b1.selectbox(
-            "表示する販売会社を選択",
+            "FILTER DISTRIBUTOR",
             options=["全販売会社を表示"] + MAJOR_DISTRIBUTORS,
         )
 
@@ -707,9 +838,9 @@ def main() -> None:
                 continue
 
             st.markdown(f"""
-            <div class="dist-banner-header">
+            <div class="bb-section-banner">
                 <span>🏛️ {dist_name} 取扱上位ファンド一覧（残高順）</span>
-                <span style="font-size: 0.8rem; font-weight: normal; color: #94a3b8;">取扱上位 {len(funds_in_dist)} 本 ｜ 期間: {period_label}</span>
+                <span style="font-size: 0.78rem; font-weight: normal; color: #94a3b8;">TOP {len(funds_in_dist)} FUNDS ｜ HORIZON: {period_label}</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -738,16 +869,15 @@ def main() -> None:
     # ═══════════════════════════════════════════════════════════════════════
     with tab3:
         col_f1, col_f2, col_f3, col_f4 = st.columns([2, 1, 1, 2])
-        search_query = col_f1.text_input("🔍 検索", placeholder="ファンド名・コード・ベンチマーク・販社...")
-        theme_filter = col_f2.selectbox("テーマ分類", options=["全て"] + THEMES)
+        search_query = col_f1.text_input("🔍 QUERY FILTER", placeholder="ファンド名・コード・ベンチマーク・販社...")
+        theme_filter = col_f2.selectbox("THEME", options=["全て"] + THEMES)
         review_filter = col_f3.selectbox(
-            "ステータス",
+            "FILTER STATUS",
             options=["全て", "買い付け金額プラスのみ", "非MSCIのみ", "要確認のみ", "手動編集のみ"],
         )
 
-        # Export buttons
         with col_f4:
-            st.write("📥 レポート出力 (5シート構成)")
+            st.write("📥 EXPORT TERMINAL REPORT (5-SHEET)")
             col_d1, col_d2 = st.columns(2)
             xlsx_path = OUTPUT_DIR / "nomura_benchmarks.xlsx"
             csv_path = OUTPUT_DIR / "nomura_benchmarks.csv"
@@ -755,17 +885,17 @@ def main() -> None:
             if xlsx_path.exists():
                 with open(xlsx_path, "rb") as f:
                     col_d1.download_button(
-                        "📊 Excel (5シート)",
+                        "📊 Excel (.xlsx)",
                         f.read(),
-                        file_name="fund_benchmark_broker_intelligence.xlsx",
+                        file_name="openbb_fund_benchmark_broker_intelligence.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
             if csv_path.exists():
                 with open(csv_path, "rb") as f:
                     col_d2.download_button(
-                        "📄 CSV",
+                        "📄 CSV (.csv)",
                         f.read(),
-                        file_name="fund_benchmarks.csv",
+                        file_name="openbb_fund_benchmarks.csv",
                         mime="text/csv",
                     )
 
@@ -788,7 +918,6 @@ def main() -> None:
         elif review_filter == "手動編集のみ":
             filtered_records = [r for r in filtered_records if r.manual_override]
 
-        # Prepare editable DataFrame
         edit_rows = []
         for r in filtered_records:
             edit_rows.append({
@@ -811,7 +940,7 @@ def main() -> None:
 
         table_df = pd.DataFrame(edit_rows)
 
-        st.caption(f"該当件数: {len(table_df)} 件 (テーブル内をダブルクリックで直接編集できます)")
+        st.caption(f"MATCHED: {len(table_df)} FUNDS (ダブルクリックで直接編集可能)")
         edited_df = st.data_editor(
             table_df,
             use_container_width=True,
@@ -820,8 +949,7 @@ def main() -> None:
             disabled=["順位", "運用会社", "ファンド名", "コード", "AUM (億円)", f"買い付け金額 ({selected_period_key})", "MSCI", "手動"],
         )
 
-        # Save changes button
-        if st.button("💾 編集内容を一括保存", type="primary"):
+        if st.button("💾 SAVE CHANGES & RE-GENERATE REPORTS", type="primary"):
             updated_count = 0
             for _, row in edited_df.iterrows():
                 code = row["コード"]
@@ -873,7 +1001,7 @@ def main() -> None:
         st.caption("運用会社の商品企画部へ「**今どのテーマに買い付け資金が集まっており、どの販売会社と組めば最も売れるか**」を提案するためのコンサルティングインテリジェンスです。")
 
         company_for_pitch = st.selectbox(
-            "提案対象のアセットマネジメント会社",
+            "TARGET ASSET MANAGER",
             options=selected_company_labels,
         )
 
@@ -883,22 +1011,22 @@ def main() -> None:
         col_p1, col_p2 = st.columns([1, 1])
 
         with col_p1:
-            st.markdown(f"#### 🧩 {company_for_pitch} ラインアップ・ギャップ分析")
+            st.markdown(f"#### 🧩 {company_for_pitch} LINEUP GAP ANALYSIS")
             for prop in proposals:
                 is_gap = "ギャップ" in prop["status"]
-                badge_class = "proposal-pill-gap" if is_gap else "proposal-pill-ok"
+                badge_class = "bb-badge-gap" if is_gap else "bb-badge-ok"
                 st.markdown(f"""
-                <div class="proposal-card-box">
+                <div class="bb-pitch-box">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <span style="font-size: 1.15rem; font-weight: 700; color: #f8fafc;">{prop['theme']}</span>
+                        <span style="font-size: 1.15rem; font-weight: 700; color: #ffffff;">{prop['theme']}</span>
                         <span class="{badge_class}">{prop['status']}</span>
                     </div>
-                    <div style="font-size: 0.84rem; color: #94a3b8; margin-bottom: 8px;">
-                        自社現保有本数: <b style="color: #f1f5f9;">{prop['existing_funds_count']} 本</b> ｜ 自社AUM: <b style="color: #f1f5f9;">{prop['theme_aum_display']}</b> ｜ 自社買い付け金額: <b style="color: #38bdf8;">{prop['theme_inflow_display']}</b>
+                    <div style="font-size: 0.84rem; color: #94a3b8; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace;">
+                        自社現保有: <b style="color: #f1f5f9;">{prop['existing_funds_count']} 本</b> ｜ AUM: <b style="color: #f1f5f9;">{prop['theme_aum_display']}</b> ｜ 買い付け金額: <b style="color: #00F5D4;">{prop['theme_inflow_display']}</b>
                     </div>
-                    <div style="background: rgba(8, 12, 20, 0.7); border: 1px solid rgba(255, 255, 255, 0.07); padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; margin-top: 8px;">
-                        <div style="margin-bottom: 4px;"><b style="color: #38bdf8;">推奨MSCI指数:</b> <span style="color: #e2e8f0; font-family: 'JetBrains Mono', monospace;">{prop['recommended_msci_index']}</span></div>
-                        <div style="margin-bottom: 6px;"><b style="color: #fbbf24;">最適主幹販社:</b> <span style="color: #fde68a;">{prop['best_selling_brokers']}</span></div>
+                    <div style="background: #0d111a; border: 1px solid var(--bb-border); padding: 10px 14px; border-radius: 6px; font-size: 0.85rem; margin-top: 8px;">
+                        <div style="margin-bottom: 4px;"><b style="color: #00F5D4;">推奨MSCI指数:</b> <span style="color: #e2e8f0; font-family: 'JetBrains Mono', monospace;">{prop['recommended_msci_index']}</span></div>
+                        <div style="margin-bottom: 6px;"><b style="color: #FBBF24;">最適主幹販社:</b> <span style="color: #fde68a;">{prop['best_selling_brokers']}</span></div>
                         <div style="color: #cbd5e1; font-size: 0.82rem; line-height: 1.5;">{prop['proposal_narrative']}</div>
                     </div>
                 </div>
@@ -926,8 +1054,8 @@ def main() -> None:
             )
 
             st.markdown(f"""
-            <div style="background: rgba(56, 189, 248, 0.08); border-left: 3px solid #38bdf8; padding: 12px 16px; border-radius: 0 8px 8px 0; margin-top: 1rem; font-size: 0.86rem; color: #bae6fd;">
-                <b>💡 提案トークの活用例（対 {company_for_pitch}）:</b><br/>
+            <div style="background: rgba(0, 245, 212, 0.06); border-left: 3px solid #00F5D4; padding: 12px 16px; border-radius: 0 6px 6px 0; margin-top: 1rem; font-size: 0.86rem; color: #bae6fd;">
+                <b style="color: #00F5D4;">💡 提案トークの活用例（対 {company_for_pitch}）:</b><br/>
                 <i>「御社のラインアップにはAI・半導体分野が不足しています。市場ではこのテーマに期間中大きな買い付けが発生しており、特に<b>SBI証券・楽天証券</b>での売れ行きが突出しています。ぜひ<b>MSCI AI & Robotics指数</b>を採用し、ネット証券を主幹販社とした新商品を企画しませんか？」</i>
             </div>
             """, unsafe_allow_html=True)
@@ -941,7 +1069,7 @@ def main() -> None:
 
         fund_options = {r.fund_code: f"#{r.rank} [{r.management_company[:2]}] {r.fund_name} ({format_aum_oku(r.aum)} / 買付 {format_inflow_oku(r.estimated_net_inflow * period_multiplier)})" for r in records}
         selected_code = st.selectbox(
-            "分析するファンドを選択",
+            "SELECT FUND FOR DRILLDOWN",
             options=list(fund_options.keys()),
             format_func=lambda x: fund_options[x],
         )
@@ -964,22 +1092,22 @@ def main() -> None:
                     st.link_button("📄 交付目論見書PDFを開く", selected_record.prospectus_pdf_url)
 
                 st.divider()
-                st.write("🛠️ **単体AIアクション**")
+                st.write("🛠️ **SINGLE FUND AI ACTIONS**")
                 col_btn1, col_btn2 = st.columns(2)
-                if col_btn1.button("🔄 AI単体再抽出", key=f"reextract_{selected_code}"):
-                    with st.spinner("AI再抽出を実行中..."):
+                if col_btn1.button("🔄 AI RE-EXTRACT", key=f"reextract_{selected_code}"):
+                    with st.spinner("Executing LLM Inference..."):
                         new_rec = reextract_single_fund(
                             fund_code=selected_code,
                             use_llm=True,
                             provider=provider_arg,
                         )
                         if new_rec:
-                            st.success(f"再抽出完了: {new_rec.benchmark} ({new_rec.index_provider})")
+                            st.success(f"Extracted: {new_rec.benchmark} ({new_rec.index_provider})")
                             st.session_state["cached_records"] = load_records_for_companies(selected_company_ids)
                             st.rerun()
 
-                if col_btn2.button("🔍 強制OCR再抽出", key=f"ocr_{selected_code}"):
-                    with st.spinner("強制OCRを実行中..."):
+                if col_btn2.button("🔍 OCR RE-EXTRACT", key=f"ocr_{selected_code}"):
+                    with st.spinner("Executing Optical OCR..."):
                         new_rec = reextract_single_fund(
                             fund_code=selected_code,
                             use_llm=True,
@@ -987,7 +1115,7 @@ def main() -> None:
                             force_ocr=True,
                         )
                         if new_rec:
-                            st.success(f"OCR再抽出完了: {new_rec.benchmark} ({new_rec.index_provider})")
+                            st.success(f"OCR Extracted: {new_rec.benchmark} ({new_rec.index_provider})")
                             st.session_state["cached_records"] = load_records_for_companies(selected_company_ids)
                             st.rerun()
 
@@ -1015,24 +1143,24 @@ def main() -> None:
             col_g1, col_g2 = st.columns([1, 1])
 
             with col_g1:
-                st.markdown("##### 📊 1日ごとの買い付け金額推移 (日次フロー)")
+                st.markdown("##### 📊 DAILY NET INFLOW VELOCITY (日次フロー)")
                 st.bar_chart(
                     daily_df.set_index("date")["daily_inflow_oku"],
-                    color="#38bdf8",
+                    color="#00F5D4",
                     x_label="日付",
                     y_label="日次買い付け金額 (億円)",
                 )
 
             with col_g2:
-                st.markdown("##### 📈 累積買い付け金額 & 基準価額推移")
+                st.markdown("##### 📈 CUMULATIVE FLOW & NAV TRAJECTORY")
                 st.line_chart(
                     daily_df.set_index("date")[["cumulative_inflow_oku", "aum_oku"]],
-                    color=["#10b981", "#6366f1"],
+                    color=["#00F5D4", "#818cf8"],
                     x_label="日付",
                     y_label="金額 (億円)",
                 )
 
-            st.markdown("##### 📋 日次詳細データテーブル")
+            st.markdown("##### 📋 DAILY TRANSACTION LEDGER")
             st.dataframe(
                 daily_df.rename(columns={
                     "date": "日付",
