@@ -86,3 +86,49 @@ def test_product_proposals_generator():
     assert "ギャップ" in ai_prop["status"]
     assert "SBI証券" in ai_prop["best_selling_brokers"]
     assert "MSCI" in ai_prop["recommended_msci_index"]
+
+
+def test_funds_grouped_by_distributor_magazine_format(tmp_path):
+    from app.distributors import get_funds_grouped_by_distributor
+    from app.stage6_output import create_styled_excel
+
+    records = [
+        BenchmarkRecord(
+            rank=1,
+            management_company="野村アセットマネジメント",
+            fund_name="野村外国株式インデックスファンド・MSCI-KOKUSAI（確定拠出年金向け）",
+            fund_code="0131102B",
+            aum=10135e8,
+            estimated_net_inflow=500e8,
+            theme_category="全世界・先進国株式",
+            benchmark="MSCI-KOKUSAI",
+            is_msci=True,
+            top_distributors="野村證券 10,135億 / みずほFG 516億",
+        ),
+        BenchmarkRecord(
+            rank=2,
+            management_company="大和アセットマネジメント",
+            fund_name="DCダイワ日本株式インデックス",
+            fund_code="0431102C",
+            aum=1116e8,
+            estimated_net_inflow=80e8,
+            theme_category="日本株式・高配当",
+            benchmark="TOPIX",
+            is_msci=False,
+            top_distributors="大和証券 1,116億 / 三井住友信託",
+        ),
+    ]
+
+    grouped = get_funds_grouped_by_distributor(records)
+    assert "野村證券" in grouped
+    assert len(grouped["野村證券"]) >= 1
+    assert grouped["野村證券"][0]["fund_name"] == "野村外国株式インデックスファンド・MSCI-KOKUSAI（確定拠出年金向け）"
+
+    assert "大和証券" in grouped
+    assert len(grouped["大和証券"]) >= 1
+
+    # Test 5-sheet excel export
+    excel_file = tmp_path / "test_report.xlsx"
+    create_styled_excel(records, excel_file)
+    assert excel_file.exists()
+

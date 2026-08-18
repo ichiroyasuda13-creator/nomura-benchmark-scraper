@@ -1,11 +1,12 @@
 """Streamlit web app for Multi-Asset Management Benchmark Scraper & Intelligence.
 
 Features:
-- Multi-Asset Managers: 野村アセット, 大和アセット, 三菱UFJアセット
+- Multi-Asset Managers (1社/2社/3社同時選択 & 一括実行): 野村アセット, 大和アセット, 三菱UFJアセット
+- Distributor-by-Distributor Fund Rankings (添付雑誌DCトレンドフォーマット完全再現)
 - Net Inflow (買い付け金額 / 推定純流入) & Performance Effect Calculation
 - Broker & Distributor Intelligence (主要販売会社 & 販社別売れ行き)
 - Theme & Gap Analysis for Consultative Product Proposals
-- Interactive Data Editor & 4-Sheet Excel Generation
+- Interactive Data Editor & 5-Sheet Excel Generation
 """
 
 from __future__ import annotations
@@ -47,7 +48,12 @@ try:
         ensure_dirs,
     )
     from app.daiwa_stage1 import run_stage1_daiwa
-    from app.distributors import build_broker_theme_sales_matrix, resolve_fund_distributors
+    from app.distributors import (
+        MAJOR_DISTRIBUTORS,
+        build_broker_theme_sales_matrix,
+        get_funds_grouped_by_distributor,
+        resolve_fund_distributors,
+    )
     from app.flow_calculator import estimate_fund_flow_from_returns
     from app.http_client import load_json, save_json, setup_logging
     from app.llm import get_available_providers, llm_available
@@ -62,6 +68,7 @@ try:
     from app.muam_stage1 import run_stage1_muam
     from app.proposal_generator import generate_product_proposals
     from app.stage5_benchmark import reextract_single_fund, update_manual_override
+    from app.stage6_output import run_stage6
     from app.theme_classifier import THEMES, classify_fund_theme
 except Exception as _import_err:
     st.error(f"⚠️ 初期化インポートエラー: {_import_err}")
@@ -138,6 +145,20 @@ st.markdown("""
         color: #94a3b8;
     }
 
+    /* Distributor Magazine Section Headers */
+    .dist-header-bar {
+        background: linear-gradient(90deg, #1e3a8a 0%, #1e293b 100%);
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 1.05rem;
+        padding: 8px 16px;
+        border-radius: 8px;
+        margin: 1.2rem 0 0.6rem 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
     /* Proposal Pitch Cards */
     .proposal-card {
         background: rgba(30, 41, 59, 0.6);
@@ -170,32 +191,24 @@ st.markdown("""
 
 
 # ── Pipeline Runner ────────────────────────────────────────────────────────
-def run_pipeline(
+def run_pipeline_for_company(
     company_id: str,
     max_funds: int,
     use_llm: bool,
     force: bool,
     provider: str | None = None,
     workers: int = 5,
+    log_func=None,
+    prog_func=None,
 ) -> list[BenchmarkRecord]:
     from app.stage1_list import run_stage1
     from app.stage2_pdf_url import run_stage2
     from app.stage3_download import run_stage3
     from app.stage4_extract_text import run_stage4
     from app.stage5_benchmark import run_stage5
-    from app.stage6_output import run_stage6
 
     ensure_dirs()
     setup_logging()
-
-    prog_bar = st.progress(0, text="パイプライン初期化中...")
-    status_text = st.empty()
-    log_area = st.empty()
-    logs: list[str] = []
-
-    def log(msg: str) -> None:
-        logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
-        log_area.code("\n".join(logs[-15:]), language="text")
 
     company_names = {
         "nomura": "野村アセットマネジメント",
@@ -204,81 +217,91 @@ def run_pipeline(
     }
     company_name = company_names.get(company_id, "野村アセットマネジメント")
 
+    if log_func:
+        log_func(f"🚀 {company_name} のパイプライン開始 (AUM上位 {max_funds}本)")
+
     # Stage 1
-    prog_bar.progress(1 / 7, text=f"Stage 1/6: {company_name} ファンド一覧取得中...")
-    status_text.info(f"Stage 1: {company_name} 公式APIからAUM上位ファンドを取得中...")
     if company_id == "daiwa":
         funds = run_stage1_daiwa(force=force, max_funds=max_funds)
     elif company_id == "muam":
         funds = run_stage1_muam(force=force, max_funds=max_funds)
     else:
         funds = run_stage1(force=force, max_funds=max_funds)
-    log(f"Stage 1 完了: {len(funds)} 本のファンド情報を取得")
+    if log_func:
+        log_func(f"Stage 1 完了: {len(funds)} 本のファンド情報取得")
 
     # Stage 2
-    prog_bar.progress(2 / 7, text="Stage 2/6: 交付目論見書PDF URL解決中...")
-    status_text.info(f"Stage 2: PDF URLを並行解決中 (並行数: {workers})...")
     if company_id not in ("daiwa", "muam"):
         run_stage2(force=force, max_workers=workers)
-    log("Stage 2 完了: 交付目論見書URL解決完了")
+    if log_func:
+        log_func("Stage 2 完了: 交付目論見書URL解決")
 
     # Stage 3
-    prog_bar.progress(3 / 7, text="Stage 3/6: PDFダウンロード中...")
-    status_text.info(f"Stage 3: 交付目論見書PDFをダウンロード中 (並行数: {workers})...")
     run_stage3(force=force, max_workers=workers)
-    log("Stage 3 完了: PDFダウンロード完了")
+    if log_func:
+        log_func("Stage 3 完了: PDFダウンロード完了")
 
     # Stage 4
-    prog_bar.progress(4 / 7, text="Stage 4/6: テキスト抽出中...")
-    status_text.info("Stage 4: PyMuPDF / OCRで目論見書テキストを抽出中...")
     run_stage4(force=force, allow_ocr=True, max_workers=workers)
-    log("Stage 4 完了: テキスト抽出完了")
+    if log_func:
+        log_func("Stage 4 完了: テキスト抽出完了")
 
     # Stage 5
-    prov_label = provider or "Auto"
-    prog_bar.progress(5 / 7, text=f"Stage 5/6: ベンチマーク・純流入・販社並行抽出中 (LLM: {prov_label}, 並行数: {workers})...")
-    status_text.info(f"Stage 5: ベンチマーク指数・推定純流入・主要販社を並行分析中 (並行数: {workers})...")
-
-    def _stage5_progress(done: int, total_cnt: int, item_name: str) -> None:
-        pct = 5 / 7 + (done / total_cnt) * (1 / 7)
-        prog_bar.progress(min(pct, 0.95), text=f"Stage 5/6: {done}/{total_cnt} 本抽出完了 ({item_name})")
-        if done % 5 == 0 or done == total_cnt:
-            log(f"Stage 5 進捗: {done}/{total_cnt} 本 ({item_name})")
+    def _stage5_cb(done: int, total_cnt: int, item_name: str) -> None:
+        if prog_func:
+            prog_func(done, total_cnt, f"{company_name}: {item_name}")
+        if (done % 5 == 0 or done == total_cnt) and log_func:
+            log_func(f"Stage 5 進捗: {done}/{total_cnt} 本 ({item_name})")
 
     records = run_stage5(
         use_llm=use_llm,
         provider=provider,
         max_workers=workers,
-        progress_callback=_stage5_progress,
+        progress_callback=_stage5_cb,
     )
-    log(f"Stage 5 完了: {len(records)} 本のベンチマーク・フロー分析完了")
-
+    for r in records:
+        r.management_company = company_name
 
     # Save company-specific copy
     comp_json = DATA_DIR / f"{company_id}_benchmarks.json"
     save_json(comp_json, [r.model_dump(mode="json") for r in records])
+    if log_func:
+        log_func(f"✅ {company_name} 完了: {len(records)} 本の分析完了")
 
-    # Stage 6
-    prog_bar.progress(6 / 7, text="Stage 6/6: 4シート構成Excel & CSV出力中...")
-    status_text.info("Stage 6: スタイル適用済み多機能Excelレポート（4シート）とCSVを生成中...")
-    run_stage6(records)
-    log("Stage 6 完了: Excel (4シート) / CSV 出力完了")
-
-    prog_bar.progress(1.0, text="✅ 全ステージ完了!")
-    status_text.success(f"✅ {company_name} のパイプラインが正常に完了しました!")
     return records
 
 
 # ── Load existing data ─────────────────────────────────────────────────────
-def load_records_for_company(company_id: str) -> list[BenchmarkRecord]:
-    comp_json = DATA_DIR / f"{company_id}_benchmarks.json"
-    if comp_json.exists():
-        raw = load_json(comp_json, [])
-        return [BenchmarkRecord.model_validate(item) for item in raw]
-    if BENCHMARKS_JSON.exists():
-        raw = load_json(BENCHMARKS_JSON, [])
-        return [BenchmarkRecord.model_validate(item) for item in raw]
-    return []
+def load_records_for_companies(company_ids: list[str]) -> list[BenchmarkRecord]:
+    combined_records: list[BenchmarkRecord] = []
+    company_names = {
+        "nomura": "野村アセットマネジメント",
+        "daiwa": "大和アセットマネジメント",
+        "muam": "三菱UFJアセットマネジメント",
+    }
+
+    for cid in company_ids:
+        comp_json = DATA_DIR / f"{cid}_benchmarks.json"
+        if comp_json.exists():
+            raw = load_json(comp_json, [])
+            recs = [BenchmarkRecord.model_validate(item) for item in raw]
+            for r in recs:
+                if not r.management_company or r.management_company == "野村アセットマネジメント":
+                    r.management_company = company_names.get(cid, "野村アセットマネジメント")
+            combined_records.extend(recs)
+        elif cid == "nomura" and BENCHMARKS_JSON.exists():
+            raw = load_json(BENCHMARKS_JSON, [])
+            recs = [BenchmarkRecord.model_validate(item) for item in raw]
+            for r in recs:
+                r.management_company = "野村アセットマネジメント"
+            combined_records.extend(recs)
+
+    # Re-rank combined records by AUM descending
+    combined_records.sort(key=lambda x: x.aum, reverse=True)
+    for idx, r in enumerate(combined_records, start=1):
+        r.rank = idx
+
+    return combined_records
 
 
 # ── Main Application ───────────────────────────────────────────────────────
@@ -287,25 +310,31 @@ def main() -> None:
     <div class="app-header">
         <div class="header-badge">CONSULTATIVE SALES INTELLIGENCE</div>
         <h1>📊 ファンド・ベンチマーク抽出 & 販社営業インテリジェンス</h1>
-        <p>野村・大和・三菱UFJ 3大運用会社対応 ｜ 資金純流入額（買い付け金額）推定 × 主要販売会社 × 商品企画マッチング</p>
+        <p>野村・大和・三菱UFJ 3大運用会社対応 ｜ 資金純流入額（買い付け金額）推定 × 販売会社別ランキング × 商品企画マッチング</p>
     </div>
     """, unsafe_allow_html=True)
 
     # ── Sidebar Configurations ─────────────────────────────────────────────
     with st.sidebar:
-        st.header("🏢 運用会社の選択")
+        st.header("🏢 対象運用会社の選択")
         company_options = {
             "nomura": "野村アセットマネジメント",
             "daiwa": "大和アセットマネジメント",
             "muam": "三菱UFJアセットマネジメント",
         }
-        selected_company_id = st.selectbox(
-            "対象運用会社",
+        selected_company_ids = st.multiselect(
+            "分析・実行対象（1社〜3社一括選択可能）",
             options=list(company_options.keys()),
+            default=["nomura", "daiwa", "muam"],
             format_func=lambda x: company_options[x],
-            help="分析・スクレイピング対象の資産運用会社を選択",
+            help="1社のみ、2社、または3社同時に選択して一括実行・統合分析できます",
         )
-        selected_company_name = company_options[selected_company_id]
+
+        if not selected_company_ids:
+            st.warning("⚠️ 少なくとも1社を選択してください。")
+            selected_company_ids = ["nomura"]
+
+        selected_company_labels = [company_options[cid] for cid in selected_company_ids]
 
         st.divider()
         st.header("⚙️ 実行・AI設定")
@@ -324,11 +353,11 @@ def main() -> None:
         )
         provider_arg = None if selected_provider_key == "auto" else selected_provider_key
 
-        max_funds = st.slider(
-            "取得ファンド数 (AUM順)",
+        max_funds_per_company = st.slider(
+            "1社あたりの取得ファンド数 (AUM順)",
             min_value=5,
             max_value=200,
-            value=100,
+            value=50,
             step=5,
         )
 
@@ -344,11 +373,8 @@ def main() -> None:
         force = st.toggle("キャッシュ無視で全再取得", value=False)
 
         st.divider()
-        run_clicked = st.button(
-            f"🚀 {selected_company_name} 実行開始",
-            type="primary",
-            use_container_width=True,
-        )
+        button_label = f"🚀 選択した運用会社（{len(selected_company_ids)}社）を一括実行"
+        run_clicked = st.button(button_label, type="primary", use_container_width=True)
 
         st.divider()
         st.subheader("🔑 API Key 接続状態")
@@ -359,34 +385,60 @@ def main() -> None:
 
     # ── Run pipeline trigger ───────────────────────────────────────────────
     if run_clicked:
-        try:
-            records = run_pipeline(
-                company_id=selected_company_id,
-                max_funds=max_funds,
-                use_llm=use_llm,
-                force=force,
-                provider=provider_arg,
-                workers=workers,
-            )
-            st.session_state[f"records_{selected_company_id}"] = records
-        except Exception as e:
-            st.error(f"❌ 実行エラー: {e}")
+        prog_bar = st.progress(0, text="パイプライン初期化中...")
+        status_text = st.empty()
+        log_area = st.empty()
+        logs: list[str] = []
 
-    # Load data for selected company
-    records = st.session_state.get(f"records_{selected_company_id}")
+        def log(msg: str) -> None:
+            logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+            log_area.code("\n".join(logs[-15:]), language="text")
+
+        def prog(done: int, total_cnt: int, label: str) -> None:
+            prog_bar.progress(min(done / total_cnt, 0.98), text=label)
+
+        all_executed_records = []
+        for c_idx, cid in enumerate(selected_company_ids, start=1):
+            c_name = company_options[cid]
+            status_text.info(f"[{c_idx}/{len(selected_company_ids)}] {c_name} を実行中...")
+            try:
+                c_records = run_pipeline_for_company(
+                    company_id=cid,
+                    max_funds=max_funds_per_company,
+                    use_llm=use_llm,
+                    force=force,
+                    provider=provider_arg,
+                    workers=workers,
+                    log_func=log,
+                    prog_func=prog,
+                )
+                all_executed_records.extend(c_records)
+            except Exception as e:
+                st.error(f"❌ {c_name} の実行エラー: {e}")
+
+        if all_executed_records:
+            # Re-export unified 5-sheet excel
+            run_stage6(all_executed_records)
+            prog_bar.progress(1.0, text="✅ 全社のパイプラインが完了しました!")
+            status_text.success(f"✅ 選択された {len(selected_company_ids)} 社（合計 {len(all_executed_records)}本）の実行が正常に完了しました!")
+            st.session_state["cached_records"] = all_executed_records
+
+    # Load data for selected companies
+    records = st.session_state.get("cached_records")
     if not records:
-        records = load_records_for_company(selected_company_id)
+        records = load_records_for_companies(selected_company_ids)
         if records:
-            st.session_state[f"records_{selected_company_id}"] = records
+            st.session_state["cached_records"] = records
 
     if not records:
-        st.info(f"💡 サイドバーの「{selected_company_name} 実行開始」をクリックしてデータを取得してください。")
+        st.info("💡 サイドバーの「一括実行」ボタンをクリックしてデータを取得してください。")
         return
 
     # ── Top Level Tabs ─────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4 = st.tabs([
-        f"📈 {selected_company_name} マーケット & 資金流入分析",
-        "📋 ファンド一覧 & 純流入・販社レビュー",
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        f"📈 マーケット & 資金流入分析 ({' / '.join(selected_company_labels)})",
+        "🏛️ 販売会社別ファンド一覧（販社別ランキング）",
+        "📋 全ファンド一覧 & レビュー",
         "💡 商品企画提案 & 販社マッチング",
         "🔍 目論見書 & フローインスペクター",
     ])
@@ -410,7 +462,7 @@ def main() -> None:
         st.markdown(f"""
         <div class="kpi-container">
             <div class="kpi-box">
-                <div class="kpi-box-title">総ファンド数 ({selected_company_name})</div>
+                <div class="kpi-box-title">総ファンド数 ({len(selected_company_ids)}社合計)</div>
                 <div class="kpi-box-num">{total_count}</div>
                 <div class="kpi-box-sub">AUM合計: {total_aum / 1e12:.2f} 兆円</div>
             </div>
@@ -440,11 +492,11 @@ def main() -> None:
         col_a1, col_a2 = st.columns([1, 1])
 
         with col_a1:
-            st.subheader("🔥 資金純流入ランキング (Top Net Inflows)")
+            st.subheader("🔥 資金純流入ランキング Top 10 (全社横断)")
             sorted_by_flow = sorted(records, key=lambda x: x.estimated_net_inflow, reverse=True)[:10]
             flow_df = pd.DataFrame([
                 {
-                    "ファンド名": r.fund_name[:20] + "...",
+                    "ファンド名": f"[{r.management_company[:2]}] {r.fund_name[:18]}...",
                     "推定純流入 (億円)": round(r.estimated_net_inflow / 1e8, 1),
                     "MSCI": "MSCI" if r.is_msci else "他社",
                 }
@@ -482,14 +534,15 @@ def main() -> None:
             )
 
         st.divider()
-        st.subheader(f"🎯 {selected_company_name} 営業ターゲット（資金流入が大きく非MSCIのファンド）")
+        st.subheader("🎯 営業ターゲット（資金流入が大きく非MSCIのファンド）")
         non_msci = [r for r in records if not r.is_msci and r.aum > 0]
         non_msci.sort(key=lambda x: (x.estimated_net_inflow, x.aum), reverse=True)
 
         targets_data = []
-        for t in non_msci[:10]:
+        for t in non_msci[:12]:
             targets_data.append({
                 "順位": t.rank,
+                "運用会社": t.management_company,
                 "ファンド名": t.fund_name,
                 "AUM (億円)": round(t.aum / 1e8, 0),
                 "推定純流入 (億円)": format_inflow_oku(t.estimated_net_inflow),
@@ -506,9 +559,58 @@ def main() -> None:
         )
 
     # ═══════════════════════════════════════════════════════════════════════
-    # TAB 2: FUND LIST & INTERACTIVE REVIEW
+    # TAB 2: DISTRIBUTOR RANKINGS (ATTACHED FORMAT REPLICATION)
     # ═══════════════════════════════════════════════════════════════════════
     with tab2:
+        st.subheader("🏛️ 販売会社別 取扱商品ランキング（添付フォーマット準拠）")
+        st.caption("各販売会社（野村證券、大和証券、みずほFG、三菱UFJ、三井住友信託、SMBC日興、SBI証券、楽天証券、りそな銀行、日本生命 等）が主力として販売しているファンドと残高・純流入一覧")
+
+        col_b1, col_b2 = st.columns([1, 2])
+        dist_filter = col_b1.selectbox(
+            "表示する販売会社を選択",
+            options=["全販売会社を表示"] + MAJOR_DISTRIBUTORS,
+        )
+
+        dist_groups = get_funds_grouped_by_distributor(records)
+
+        target_distributors = MAJOR_DISTRIBUTORS if dist_filter == "全販売会社を表示" else [dist_filter]
+
+        for dist_name in target_distributors:
+            funds_in_dist = dist_groups.get(dist_name, [])
+            if not funds_in_dist:
+                continue
+
+            st.markdown(f"""
+            <div class="dist-header-bar">
+                <span>🏛️</span> <span>{dist_name} 取扱上位ファンド一覧（残高順）</span>
+                <span style="font-size: 0.8rem; font-weight: normal; margin-left: auto;">取扱上位 {len(funds_in_dist)} 本</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+            d_df = pd.DataFrame([
+                {
+                    "順位": f["rank"],
+                    "運用商品名 (ファンド名)": f["fund_name"],
+                    "運用会社": f["management_company"],
+                    "残高 (億円)": f["aum_oku"],
+                    "推定純流入 (億円)": format_inflow_oku(f["inflow_oku"] * 1e8),
+                    "ベンチマーク指数": f["benchmark"],
+                    "MSCI採用": "🟢 MSCI" if f["is_msci"] else "⚪ 他社",
+                    "営業アプローチ戦略": f["action"],
+                }
+                for f in funds_in_dist
+            ])
+
+            st.dataframe(
+                d_df,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # TAB 3: ALL FUNDS LIST & INTERACTIVE REVIEW
+    # ═══════════════════════════════════════════════════════════════════════
+    with tab3:
         col_f1, col_f2, col_f3, col_f4 = st.columns([2, 1, 1, 2])
         search_query = col_f1.text_input("🔍 検索", placeholder="ファンド名・コード・ベンチマーク・販社...")
         theme_filter = col_f2.selectbox("テーマ分類", options=["全て"] + THEMES)
@@ -519,7 +621,7 @@ def main() -> None:
 
         # Export buttons
         with col_f4:
-            st.write("📥 レポート出力 (4シート構成)")
+            st.write("📥 レポート出力 (5シート構成)")
             col_d1, col_d2 = st.columns(2)
             xlsx_path = OUTPUT_DIR / "nomura_benchmarks.xlsx"
             csv_path = OUTPUT_DIR / "nomura_benchmarks.csv"
@@ -527,9 +629,9 @@ def main() -> None:
             if xlsx_path.exists():
                 with open(xlsx_path, "rb") as f:
                     col_d1.download_button(
-                        "📊 Excel (4シート)",
+                        "📊 Excel (5シート)",
                         f.read(),
-                        file_name=f"{selected_company_id}_benchmarks_intelligence.xlsx",
+                        file_name="fund_benchmark_broker_intelligence.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
             if csv_path.exists():
@@ -537,7 +639,7 @@ def main() -> None:
                     col_d2.download_button(
                         "📄 CSV",
                         f.read(),
-                        file_name=f"{selected_company_id}_benchmarks.csv",
+                        file_name="fund_benchmarks.csv",
                         mime="text/csv",
                     )
 
@@ -547,7 +649,7 @@ def main() -> None:
             q = search_query.lower()
             filtered_records = [
                 r for r in filtered_records
-                if q in r.fund_name.lower() or q in r.fund_code.lower() or q in (r.benchmark or "").lower() or q in (r.top_distributors or "").lower()
+                if q in r.fund_name.lower() or q in r.fund_code.lower() or q in (r.benchmark or "").lower() or q in (r.top_distributors or "").lower() or q in (r.management_company or "").lower()
             ]
         if theme_filter != "全て":
             filtered_records = [r for r in filtered_records if r.theme_category == theme_filter]
@@ -565,11 +667,11 @@ def main() -> None:
         for r in filtered_records:
             edit_rows.append({
                 "順位": r.rank,
+                "運用会社": r.management_company,
                 "ファンド名": r.fund_name,
                 "コード": r.fund_code,
                 "AUM (億円)": round(r.aum / 1e8, 0) if r.aum else 0,
                 "推定純流入 (億円)": format_inflow_oku(r.estimated_net_inflow),
-                "運用効果 (億円)": format_inflow_oku(r.performance_effect),
                 "テーマ分類": r.theme_category or "全世界・先進国株式",
                 "ベンチマーク指数": r.benchmark or "",
                 "指数提供者": r.index_provider or "なし",
@@ -583,13 +685,13 @@ def main() -> None:
 
         table_df = pd.DataFrame(edit_rows)
 
-        st.caption(f"該当件数: {len(table_df)} 件 (テーブル内をダブルクリックでベンチマーク指数・提供者・テーマ・メモを直接編集できます)")
+        st.caption(f"該当件数: {len(table_df)} 件 (テーブル内をダブルクリックで直接編集できます)")
         edited_df = st.data_editor(
             table_df,
             use_container_width=True,
             hide_index=True,
             height=500,
-            disabled=["順位", "ファンド名", "コード", "AUM (億円)", "推定純流入 (億円)", "運用効果 (億円)", "MSCI", "手動"],
+            disabled=["順位", "運用会社", "ファンド名", "コード", "AUM (億円)", "推定純流入 (億円)", "MSCI", "手動"],
         )
 
         # Save changes button
@@ -621,27 +723,31 @@ def main() -> None:
                     updated_count += 1
 
             if updated_count > 0:
-                comp_json = DATA_DIR / f"{selected_company_id}_benchmarks.json"
-                save_json(comp_json, [r.model_dump(mode="json") for r in records])
                 st.success(f"✅ {updated_count} 件の変更を保存しました!")
-                st.session_state[f"records_{selected_company_id}"] = records
+                st.session_state["cached_records"] = records
                 st.rerun()
             else:
                 st.info("変更はありませんでした。")
 
     # ═══════════════════════════════════════════════════════════════════════
-    # TAB 3: PRODUCT PROPOSALS & BROKER MATCHMAKER
+    # TAB 4: PRODUCT PROPOSALS & BROKER MATCHMAKER
     # ═══════════════════════════════════════════════════════════════════════
-    with tab3:
-        st.subheader(f"💡 {selected_company_name} 向け 商品企画提案 & 販社マッチング")
+    with tab4:
+        st.subheader("💡 運用会社向け 商品企画提案 & 販社マッチング")
         st.write("運用会社の商品企画部へ「**今どのテーマに資金が集まっており、どの販売会社と組めば最も売れるか**」を提案するためのコンサルティングインテリジェンスです。")
 
-        proposals = generate_product_proposals(records, selected_company_name)
+        company_for_pitch = st.selectbox(
+            "提案対象のアセットマネジメント会社",
+            options=selected_company_labels,
+        )
+
+        firm_records = [r for r in records if r.management_company == company_for_pitch] or records
+        proposals = generate_product_proposals(firm_records, company_for_pitch)
 
         col_p1, col_p2 = st.columns([1, 1])
 
         with col_p1:
-            st.markdown("### 🧩 商品ラインアップ・ギャップ分析")
+            st.markdown(f"### 🧩 {company_for_pitch} ラインアップ・ギャップ分析")
             for prop in proposals:
                 is_gap = "ギャップ" in prop["status"]
                 badge_class = "proposal-badge-gap" if is_gap else "proposal-badge-ok"
@@ -683,17 +789,17 @@ def main() -> None:
                 hide_index=True,
             )
 
-            st.markdown("""
-            > **💡 提案トークの活用例**:
+            st.markdown(f"""
+            > **💡 提案トークの活用例（対 {company_for_pitch}）**:
             > *「御社のラインアップにはAI・半導体分野が不足しています。市場ではこのテーマに年間+2,000億円超の純流入が発生しており、特に**SBI証券・楽天証券**での売れ行きが突出しています。ぜひ**MSCI AI & Robotics指数**を採用し、ネット証券を主幹販社とした新商品を企画しませんか？」*
             """)
 
     # ═══════════════════════════════════════════════════════════════════════
-    # TAB 4: PROSPECTUS INSPECTOR & SINGLE RE-EXTRACTION
+    # TAB 5: PROSPECTUS INSPECTOR & SINGLE RE-EXTRACTION
     # ═══════════════════════════════════════════════════════════════════════
-    with tab4:
+    with tab5:
         st.subheader("🔍 目論見書 & フローインスペクター")
-        fund_options = {r.fund_code: f"#{r.rank} - {r.fund_name} ({format_aum_oku(r.aum)} / {format_inflow_oku(r.estimated_net_inflow)})" for r in records}
+        fund_options = {r.fund_code: f"#{r.rank} [{r.management_company[:2]}] {r.fund_name} ({format_aum_oku(r.aum)} / {format_inflow_oku(r.estimated_net_inflow)})" for r in records}
         selected_code = st.selectbox(
             "確認するファンドを選択",
             options=list(fund_options.keys()),
@@ -707,7 +813,7 @@ def main() -> None:
 
             with col_i1:
                 st.markdown(f"### {selected_record.fund_name}")
-                st.write(f"**運用会社**: `{selected_company_name}` ｜ **テーマ**: `{selected_record.theme_category}`")
+                st.write(f"**運用会社**: `{selected_record.management_company}` ｜ **テーマ**: `{selected_record.theme_category}`")
                 st.write(f"**純資産(AUM)**: {format_aum_oku(selected_record.aum)} ｜ **推定純流入**: `{format_inflow_oku(selected_record.estimated_net_inflow)}`")
                 st.write(f"**現在のベンチマーク**: `{selected_record.benchmark or 'なし'}` ({selected_record.index_provider})")
                 st.write(f"**MSCI採用**: {'🟢 はい' if selected_record.is_msci else 'いいえ'}")
@@ -729,7 +835,7 @@ def main() -> None:
                         )
                         if new_rec:
                             st.success(f"再抽出完了: {new_rec.benchmark} ({new_rec.index_provider})")
-                            st.session_state[f"records_{selected_company_id}"] = load_records_for_company(selected_company_id)
+                            st.session_state["cached_records"] = load_records_for_companies(selected_company_ids)
                             st.rerun()
 
                 if col_btn2.button("🔍 強制OCR再抽出", key=f"ocr_{selected_code}"):
@@ -742,7 +848,7 @@ def main() -> None:
                         )
                         if new_rec:
                             st.success(f"OCR再抽出完了: {new_rec.benchmark} ({new_rec.index_provider})")
-                            st.session_state[f"records_{selected_company_id}"] = load_records_for_company(selected_company_id)
+                            st.session_state["cached_records"] = load_records_for_companies(selected_company_ids)
                             st.rerun()
 
             with col_i2:
@@ -761,4 +867,3 @@ if __name__ == "__main__":
     except Exception as _app_exc:
         st.error(f"⚠️ アプリケーション実行エラー: {_app_exc}")
         st.exception(_app_exc)
-
