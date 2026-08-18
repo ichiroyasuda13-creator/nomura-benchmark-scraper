@@ -5,7 +5,7 @@ OpenBB Terminal Pro Theme & Architecture:
 - Multi-Asset Managers: 野村アセット, 大和アセット, 三菱UFJアセット (1社 / 2社 / 3社同時統合分析)
 - 期間切り替え機能: 直近1ヶ月 (1M) ｜ 直近3ヶ月 (3M) ｜ 年初来 (YTD) ｜ 過去1年間 (1Y)
 - ファンド別 日次買い付け推移 & 累積フロー推移インタラクティブ可視化 (OpenBB Terminal Style)
-- Distributor-by-Distributor Fund Rankings (添付雑誌DCトレンドフォーマット完全再現)
+- Distributor-by-Distributor Fund Rankings (主要販売会社別ランキング)
 - 買い付け金額（推定純流入） & 運用効果の精密計算
 - Broker & Distributor Intelligence (主要販売会社 & 販社別売れ行きマトリクス)
 - Theme & Gap Analysis for Consultative Product Proposals
@@ -818,11 +818,12 @@ def main() -> None:
         )
 
     # ═══════════════════════════════════════════════════════════════════════
-    # TAB 2: DISTRIBUTOR RANKINGS (ATTACHED FORMAT REPLICATION)
+    # TAB 2: DISTRIBUTOR RANKINGS
     # ═══════════════════════════════════════════════════════════════════════
     with tab2:
-        st.markdown("### 🏛️ 販売会社別 取扱商品ランキング（添付雑誌DCトレンドフォーマット準拠）")
+        st.markdown("### 🏛️ 販売会社別 取扱商品ランキング")
         st.caption(f"各販売会社が主力として販売しているファンドと残高・買い付け金額一覧（集計期間: {period_label}）")
+
 
         col_b1, col_b2 = st.columns([1, 2])
         dist_filter = col_b1.selectbox(
