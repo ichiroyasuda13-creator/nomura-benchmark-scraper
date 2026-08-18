@@ -6,16 +6,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any, Optional
 
-try:
-    from pydantic import BaseModel, Field, field_validator
-    _PYDANTIC_V2 = True
-except ImportError:
-    from pydantic import BaseModel, Field, validator
-    _PYDANTIC_V2 = False
-
-    def field_validator(*fields: str, mode: str = "after", **kwargs: Any):
-        pre = (mode == "before")
-        return validator(*fields, pre=pre, allow_reuse=True, **kwargs)
+from pydantic import BaseModel, Field
 
 
 class Confidence(str, Enum):
@@ -42,21 +33,30 @@ class ExtractionMethod(str, Enum):
 
 
 class CompatibleBaseModel(BaseModel):
-    """Base model with dual Pydantic v1/v2 compatibility."""
+    """Universal Pydantic v1 & v2 compatible base model."""
 
     @classmethod
     def model_validate(cls, obj: Any) -> Any:
-        if hasattr(cls, "parse_obj") and not _PYDANTIC_V2:
+        if isinstance(obj, cls):
+            return obj
+        if hasattr(super(), "model_validate"):
+            try:
+                return super().model_validate(obj)
+            except AttributeError:
+                pass
+        if hasattr(cls, "parse_obj"):
             return cls.parse_obj(obj)
-        try:
-            return super().model_validate(obj)
-        except AttributeError:
-            return cls.parse_obj(obj)
+        return cls(**obj)
 
     def model_dump(self, mode: str = "python", **kwargs: Any) -> dict[str, Any]:
-        if hasattr(super(), "model_dump") and _PYDANTIC_V2:
-            return super().model_dump(mode=mode, **kwargs)
-        return self.dict(**kwargs)
+        if hasattr(super(), "model_dump"):
+            try:
+                return super().model_dump(mode=mode, **kwargs)
+            except (AttributeError, TypeError):
+                pass
+        if hasattr(self, "dict"):
+            return self.dict(**kwargs)
+        return {k: getattr(self, k) for k in self.__dict__}
 
 
 class Fund(CompatibleBaseModel):
@@ -74,12 +74,10 @@ class Fund(CompatibleBaseModel):
     rank: Optional[int] = None
     isin_code: Optional[str] = None
 
-    @field_validator("detail_url")
-    @classmethod
-    def normalize_detail_url(cls, value: str) -> str:
-        if isinstance(value, str) and value.startswith("//"):
-            return "https:" + value
-        return value or ""
+    def __init__(self, **data: Any) -> None:
+        super().__init__(**data)
+        if isinstance(self.detail_url, str) and self.detail_url.startswith("//"):
+            self.detail_url = "https:" + self.detail_url
 
 
 class BenchmarkExtraction(CompatibleBaseModel):
@@ -101,22 +99,15 @@ class BenchmarkExtraction(CompatibleBaseModel):
     note: str = ""
     needs_review: bool = True
 
-    @field_validator("benchmark_detail", mode="before")
-    @classmethod
-    def normalize_benchmark_detail(cls, value: Any) -> Optional[str | dict[str, Any]]:
-        if value is None or value == "":
-            return None
-        if isinstance(value, dict):
-            return value
-        if isinstance(value, str):
-            text = value.strip()
+    def __init__(self, **data: Any) -> None:
+        super().__init__(**data)
+        if isinstance(self.benchmark_detail, str):
+            text = self.benchmark_detail.strip()
             if text.startswith("{"):
                 try:
-                    return json.loads(text)
-                except json.JSONDecodeError:
-                    return text
-            return text
-        return str(value)
+                    self.benchmark_detail = json.loads(text)
+                except Exception:
+                    pass
 
 
 class BenchmarkRecord(CompatibleBaseModel):

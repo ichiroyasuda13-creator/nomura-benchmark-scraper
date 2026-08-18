@@ -20,6 +20,14 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+# ── Page Config (MUST BE FIRST STREAMLIT COMMAND) ───────────────────────────
+st.set_page_config(
+    page_title="ファンド・ベンチマーク抽出 & 販社営業インテリジェンス",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 # ── Ensure project root is importable ──────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -60,14 +68,6 @@ except Exception as _import_err:
     st.exception(_import_err)
     st.stop()
 
-
-# ── Page Config ────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="ファンド・ベンチマーク抽出 & 販社営業インテリジェンス",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
 
 # ── Custom CSS ─────────────────────────────────────────────────────────────
 st.markdown("""
