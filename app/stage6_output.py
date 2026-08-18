@@ -1,8 +1,8 @@
 """Stage 6: Multi-Sheet Styled Excel and CSV Report Generation.
 
 Generates:
-  1. Sheet 1「ファンド一覧」: All funds with AUM, Net Flow, Theme, Benchmark, Distributors.
-  2. Sheet 2「MSCI営業ターゲット」: High net inflow non-MSCI funds with action triggers (Who to Call).
+  1. Sheet 1「ファンド一覧」: All funds with AUM, 買い付け金額, Theme, Benchmark, Distributors.
+  2. Sheet 2「MSCI営業ターゲット」: High 買い付け金額 non-MSCI funds with action triggers (Who to Call).
   3. Sheet 3「販売会社別ファンド一覧」: Grouped rankings per distributor (matching industry magazine format).
   4. Sheet 4「販社×テーマ別売れ行き」: Broker sales matrix showing which broker sells which theme best.
   5. Sheet 5「商品企画・組成提案」: Consultative proposal cards for asset manager pitches.
@@ -115,7 +115,7 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
     ws1.title = "ファンド一覧"
 
     headers1 = [
-        "順位", "運用会社", "ファンド名", "コード", "純資産 (億円)", "推定純流入 (億円)", "運用効果 (億円)",
+        "順位", "運用会社", "ファンド名", "コード", "純資産 (億円)", "買い付け金額 (億円)", "運用効果 (億円)",
         "テーマ分類", "ベンチマーク指数", "指数提供者", "MSCI採用", "主要販売会社 (Broker)", "営業ターゲット判定",
         "信頼度", "交付目論見書PDF",
     ]
@@ -169,7 +169,7 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
     # ── Sheet 2: MSCI Sales Targets (MSCI営業ターゲット) ─────────────────
     ws2 = wb.create_sheet(title="MSCI営業ターゲット")
     headers2 = [
-        "順位", "運用会社", "ファンド名", "コード", "純資産 (億円)", "推定純流入 (億円)", "テーマ分類",
+        "順位", "運用会社", "ファンド名", "コード", "純資産 (億円)", "買い付け金額 (億円)", "テーマ分類",
         "現在のベンチマーク", "現在の指数提供者", "主要販売会社 (攻めどころ)", "営業提案アクション (Who to Call)",
     ]
     ws2.append(headers2)
@@ -225,7 +225,7 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
         current_row += 1
 
         # Table Header
-        dist_headers = ["順位", "運用商品名 (ファンド名)", "運用会社", "残高 (億円)", "推定純流入 (億円)", "ベンチマーク指数", "MSCI採用", "提案戦略"]
+        dist_headers = ["順位", "運用商品名 (ファンド名)", "運用会社", "残高 (億円)", "買い付け金額 (億円)", "ベンチマーク指数", "MSCI採用", "提案戦略"]
         for c_idx, h in enumerate(dist_headers, start=1):
             c = ws3.cell(row=current_row, column=c_idx, value=h)
             c.font = Font(name="Meiryo UI", size=9, bold=True, color="FFFFFF")
@@ -271,7 +271,7 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
     # ── Sheet 4: Broker x Theme Sales Matrix (販社×テーマ別売れ行き) ────────
     ws4 = wb.create_sheet(title="販社×テーマ別売れ行き")
     headers4 = [
-        "主要販売会社 (Broker)", "得意テーマ分類", "取扱本数", "純資産総額 (億円)", "推定純流入 (億円)", "商品企画・組成推奨戦略",
+        "主要販売会社 (Broker)", "得意テーマ分類", "取扱本数", "純資産総額 (億円)", "買い付け金額 (億円)", "商品企画・組成推奨戦略",
     ]
     ws4.append(headers4)
     _style_header(ws4, 1, len(headers4), fill_color="4338CA")

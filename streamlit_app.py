@@ -3,7 +3,7 @@
 Features:
 - Multi-Asset Managers (1社/2社/3社同時選択 & 一括実行): 野村アセット, 大和アセット, 三菱UFJアセット
 - Distributor-by-Distributor Fund Rankings (添付雑誌DCトレンドフォーマット完全再現)
-- Net Inflow (買い付け金額 / 推定純流入) & Performance Effect Calculation
+- 買い付け金額（推定純流入） & 運用効果の精密計算
 - Broker & Distributor Intelligence (主要販売会社 & 販社別売れ行き)
 - Theme & Gap Analysis for Consultative Product Proposals
 - Interactive Data Editor & 5-Sheet Excel Generation
@@ -240,7 +240,7 @@ def run_pipeline_for_company(
                 log_func(f"⚡ {company_name}: キャッシュから {len(recs)} 本を即時読み込み・最新指標同期完了")
             return recs
 
-    # Live Pipeline Execution (safe max workers 3 to prevent Cloud OOM)
+    # Live Pipeline Execution (safe max workers to prevent Cloud memory issues)
     safe_workers = min(workers, 4)
 
     # Stage 1
@@ -293,7 +293,6 @@ def run_pipeline_for_company(
     return records
 
 
-
 # ── Load existing data ─────────────────────────────────────────────────────
 def load_records_for_companies(company_ids: list[str]) -> list[BenchmarkRecord]:
     combined_records: list[BenchmarkRecord] = []
@@ -333,7 +332,7 @@ def main() -> None:
     <div class="app-header">
         <div class="header-badge">CONSULTATIVE SALES INTELLIGENCE</div>
         <h1>📊 ファンド・ベンチマーク抽出 & 販社営業インテリジェンス</h1>
-        <p>野村・大和・三菱UFJ 3大運用会社対応 ｜ 資金純流入額（買い付け金額）推定 × 販売会社別ランキング × 商品企画マッチング</p>
+        <p>野村・大和・三菱UFJ 3大運用会社対応 ｜ 買い付け金額（推定純流入） × 販売会社別ランキング × 商品企画マッチング</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -459,9 +458,9 @@ def main() -> None:
 
     # ── Top Level Tabs ─────────────────────────────────────────────────────
     tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        f"📈 マーケット & 資金流入分析 ({' / '.join(selected_company_labels)})",
+        f"📈 マーケット & 買い付け金額分析 ({' / '.join(selected_company_labels)})",
         "🏛️ 販売会社別ファンド一覧（販社別ランキング）",
-        "📋 全ファンド一覧 & レビュー",
+        "📋 全ファンド一覧 & 買い付け金額・販社レビュー",
         "💡 商品企画提案 & 販社マッチング",
         "🔍 目論見書 & フローインスペクター",
     ])
@@ -495,12 +494,12 @@ def main() -> None:
                 <div class="kpi-box-sub">AUMシェア: {msci_aum_share:.1f}% ({msci_count}本)</div>
             </div>
             <div class="kpi-box">
-                <div class="kpi-box-title">総 推定純流入額</div>
+                <div class="kpi-box-title">総 買い付け金額（純流入）</div>
                 <div class="kpi-box-num" style="color: {'#38bdf8' if total_inflow >= 0 else '#f87171'};">{format_inflow_oku(total_inflow)}</div>
                 <div class="kpi-box-sub">直近純資金フロー</div>
             </div>
             <div class="kpi-box">
-                <div class="kpi-box-title">非MSCI 純流入額 (攻めどころ)</div>
+                <div class="kpi-box-title">非MSCI 買い付け金額 (攻めどころ)</div>
                 <div class="kpi-box-num" style="color: #fbbf24;">{format_inflow_oku(non_msci_inflow)}</div>
                 <div class="kpi-box-sub">リプレイス・新規提案余地</div>
             </div>
@@ -515,25 +514,25 @@ def main() -> None:
         col_a1, col_a2 = st.columns([1, 1])
 
         with col_a1:
-            st.subheader("🔥 資金純流入ランキング Top 10 (全社横断)")
+            st.subheader("🔥 買い付け金額ランキング Top 10 (全社横断)")
             sorted_by_flow = sorted(records, key=lambda x: x.estimated_net_inflow, reverse=True)[:10]
             flow_df = pd.DataFrame([
                 {
                     "ファンド名": f"[{r.management_company[:2]}] {r.fund_name[:18]}...",
-                    "推定純流入 (億円)": round(r.estimated_net_inflow / 1e8, 1),
+                    "買い付け金額 (億円)": round(r.estimated_net_inflow / 1e8, 1),
                     "MSCI": "MSCI" if r.is_msci else "他社",
                 }
                 for r in sorted_by_flow
             ])
             st.bar_chart(
-                flow_df.set_index("ファンド名")["推定純流入 (億円)"],
+                flow_df.set_index("ファンド名")["買い付け金額 (億円)"],
                 color="#38bdf8",
                 x_label="ファンド",
-                y_label="純流入額 (億円)",
+                y_label="買い付け金額 (億円)",
             )
 
         with col_a2:
-            st.subheader("🏷️ テーマ別 純資産 & 純流入額")
+            st.subheader("🏷️ テーマ別 純資産 & 買い付け金額")
             theme_agg: dict[str, dict] = {}
             for r in records:
                 t = r.theme_category or "全世界・先進国株式"
@@ -550,14 +549,14 @@ def main() -> None:
                     "theme": "テーマ分類",
                     "count": "本数",
                     "aum_oku": "AUM合計(億円)",
-                    "inflow_oku": "純流入合計(億円)",
+                    "inflow_oku": "買い付け金額合計(億円)",
                 }),
                 use_container_width=True,
                 hide_index=True,
             )
 
         st.divider()
-        st.subheader("🎯 営業ターゲット（資金流入が大きく非MSCIのファンド）")
+        st.subheader("🎯 営業ターゲット（買い付け金額が大きく非MSCIのファンド）")
         non_msci = [r for r in records if not r.is_msci and r.aum > 0]
         non_msci.sort(key=lambda x: (x.estimated_net_inflow, x.aum), reverse=True)
 
@@ -568,7 +567,7 @@ def main() -> None:
                 "運用会社": t.management_company,
                 "ファンド名": t.fund_name,
                 "AUM (億円)": round(t.aum / 1e8, 0),
-                "推定純流入 (億円)": format_inflow_oku(t.estimated_net_inflow),
+                "買い付け金額 (億円)": format_inflow_oku(t.estimated_net_inflow),
                 "テーマ": t.theme_category,
                 "現ベンチマーク": t.benchmark or "—",
                 "主要販売会社 (Broker)": t.top_distributors or t.primary_broker or "主要証券",
@@ -586,7 +585,7 @@ def main() -> None:
     # ═══════════════════════════════════════════════════════════════════════
     with tab2:
         st.subheader("🏛️ 販売会社別 取扱商品ランキング（添付フォーマット準拠）")
-        st.caption("各販売会社（野村證券、大和証券、みずほFG、三菱UFJ、三井住友信託、SMBC日興、SBI証券、楽天証券、りそな銀行、日本生命 等）が主力として販売しているファンドと残高・純流入一覧")
+        st.caption("各販売会社（野村證券、大和証券、みずほFG、三菱UFJ、三井住友信託、SMBC日興、SBI証券、楽天証券、りそな銀行、日本生命 等）が主力として販売しているファンドと残高・買い付け金額一覧")
 
         col_b1, col_b2 = st.columns([1, 2])
         dist_filter = col_b1.selectbox(
@@ -616,7 +615,7 @@ def main() -> None:
                     "運用商品名 (ファンド名)": f["fund_name"],
                     "運用会社": f["management_company"],
                     "残高 (億円)": f["aum_oku"],
-                    "推定純流入 (億円)": format_inflow_oku(f["inflow_oku"] * 1e8),
+                    "買い付け金額 (億円)": format_inflow_oku(f["inflow_oku"] * 1e8),
                     "ベンチマーク指数": f["benchmark"],
                     "MSCI採用": "🟢 MSCI" if f["is_msci"] else "⚪ 他社",
                     "営業アプローチ戦略": f["action"],
@@ -639,7 +638,7 @@ def main() -> None:
         theme_filter = col_f2.selectbox("テーマ分類", options=["全て"] + THEMES)
         review_filter = col_f3.selectbox(
             "ステータス",
-            options=["全て", "純流入プラスのみ", "非MSCIのみ", "要確認のみ", "手動編集のみ"],
+            options=["全て", "買い付け金額プラスのみ", "非MSCIのみ", "要確認のみ", "手動編集のみ"],
         )
 
         # Export buttons
@@ -676,7 +675,7 @@ def main() -> None:
             ]
         if theme_filter != "全て":
             filtered_records = [r for r in filtered_records if r.theme_category == theme_filter]
-        if review_filter == "純流入プラスのみ":
+        if review_filter == "買い付け金額プラスのみ":
             filtered_records = [r for r in filtered_records if r.estimated_net_inflow > 0]
         elif review_filter == "非MSCIのみ":
             filtered_records = [r for r in filtered_records if not r.is_msci]
@@ -694,7 +693,7 @@ def main() -> None:
                 "ファンド名": r.fund_name,
                 "コード": r.fund_code,
                 "AUM (億円)": round(r.aum / 1e8, 0) if r.aum else 0,
-                "推定純流入 (億円)": format_inflow_oku(r.estimated_net_inflow),
+                "買い付け金額 (億円)": format_inflow_oku(r.estimated_net_inflow),
                 "テーマ分類": r.theme_category or "全世界・先進国株式",
                 "ベンチマーク指数": r.benchmark or "",
                 "指数提供者": r.index_provider or "なし",
@@ -714,7 +713,7 @@ def main() -> None:
             use_container_width=True,
             hide_index=True,
             height=500,
-            disabled=["順位", "運用会社", "ファンド名", "コード", "AUM (億円)", "推定純流入 (億円)", "MSCI", "手動"],
+            disabled=["順位", "運用会社", "ファンド名", "コード", "AUM (億円)", "買い付け金額 (億円)", "MSCI", "手動"],
         )
 
         # Save changes button
@@ -757,7 +756,7 @@ def main() -> None:
     # ═══════════════════════════════════════════════════════════════════════
     with tab4:
         st.subheader("💡 運用会社向け 商品企画提案 & 販社マッチング")
-        st.write("運用会社の商品企画部へ「**今どのテーマに資金が集まっており、どの販売会社と組めば最も売れるか**」を提案するためのコンサルティングインテリジェンスです。")
+        st.write("運用会社の商品企画部へ「**今どのテーマに買い付け資金が集まっており、どの販売会社と組めば最も売れるか**」を提案するためのコンサルティングインテリジェンスです。")
 
         company_for_pitch = st.selectbox(
             "提案対象のアセットマネジメント会社",
@@ -781,7 +780,7 @@ def main() -> None:
                         <span class="{badge_class}">{prop['status']}</span>
                     </div>
                     <div style="font-size: 0.85rem; color: #94a3b8; margin-bottom: 6px;">
-                        自社現保有本数: <b>{prop['existing_funds_count']} 本</b> ｜ 自社AUM: <b>{prop['theme_aum_display']}</b> ｜ 自社純流入: <b>{prop['theme_inflow_display']}</b>
+                        自社現保有本数: <b>{prop['existing_funds_count']} 本</b> ｜ 自社AUM: <b>{prop['theme_aum_display']}</b> ｜ 自社買い付け金額: <b>{prop['theme_inflow_display']}</b>
                     </div>
                     <div style="background: rgba(15, 23, 42, 0.6); padding: 8px 12px; border-radius: 8px; font-size: 0.85rem; margin-top: 8px;">
                         <b style="color: #38bdf8;">推奨MSCI指数:</b> {prop['recommended_msci_index']}<br/>
@@ -802,7 +801,7 @@ def main() -> None:
                     "得意テーマ": m["theme"],
                     "取扱本数": m["fund_count"],
                     "AUM合計 (億円)": round(m["total_aum"] / 1e8, 1),
-                    "推定純流入 (億円)": format_inflow_oku(m["total_inflow"]),
+                    "買い付け金額 (億円)": format_inflow_oku(m["total_inflow"]),
                 }
                 for m in matrix_rows[:12]
             ])
@@ -814,7 +813,7 @@ def main() -> None:
 
             st.markdown(f"""
             > **💡 提案トークの活用例（対 {company_for_pitch}）**:
-            > *「御社のラインアップにはAI・半導体分野が不足しています。市場ではこのテーマに年間+2,000億円超の純流入が発生しており、特に**SBI証券・楽天証券**での売れ行きが突出しています。ぜひ**MSCI AI & Robotics指数**を採用し、ネット証券を主幹販社とした新商品を企画しませんか？」*
+            > *「御社のラインアップにはAI・半導体分野が不足しています。市場ではこのテーマに年間+2,000億円超の買い付けが発生しており、特に**SBI証券・楽天証券**での売れ行きが突出しています。ぜひ**MSCI AI & Robotics指数**を採用し、ネット証券を主幹販社とした新商品を企画しませんか？」*
             """)
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -822,7 +821,7 @@ def main() -> None:
     # ═══════════════════════════════════════════════════════════════════════
     with tab5:
         st.subheader("🔍 目論見書 & フローインスペクター")
-        fund_options = {r.fund_code: f"#{r.rank} [{r.management_company[:2]}] {r.fund_name} ({format_aum_oku(r.aum)} / {format_inflow_oku(r.estimated_net_inflow)})" for r in records}
+        fund_options = {r.fund_code: f"#{r.rank} [{r.management_company[:2]}] {r.fund_name} ({format_aum_oku(r.aum)} / 買付 {format_inflow_oku(r.estimated_net_inflow)})" for r in records}
         selected_code = st.selectbox(
             "確認するファンドを選択",
             options=list(fund_options.keys()),
@@ -837,7 +836,7 @@ def main() -> None:
             with col_i1:
                 st.markdown(f"### {selected_record.fund_name}")
                 st.write(f"**運用会社**: `{selected_record.management_company}` ｜ **テーマ**: `{selected_record.theme_category}`")
-                st.write(f"**純資産(AUM)**: {format_aum_oku(selected_record.aum)} ｜ **推定純流入**: `{format_inflow_oku(selected_record.estimated_net_inflow)}`")
+                st.write(f"**純資産(AUM)**: {format_aum_oku(selected_record.aum)} ｜ **買い付け金額**: `{format_inflow_oku(selected_record.estimated_net_inflow)}`")
                 st.write(f"**現在のベンチマーク**: `{selected_record.benchmark or 'なし'}` ({selected_record.index_provider})")
                 st.write(f"**MSCI採用**: {'🟢 はい' if selected_record.is_msci else 'いいえ'}")
                 st.write(f"**主要販売会社**: `{selected_record.top_distributors or '主要証券'}`")
