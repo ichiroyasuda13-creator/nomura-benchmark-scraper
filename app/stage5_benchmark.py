@@ -527,9 +527,9 @@ def update_manual_override(
     fund_code: str,
     *,
     benchmark: str | None,
-    index_provider: str,
-    fund_type: str,
-    needs_review: bool,
+    index_provider: str = "",
+    fund_type: str = "インデックス型",
+    needs_review: bool = False,
     comment: str = "",
     reviewer: str = "Analyst",
 ) -> BenchmarkRecord | None:
@@ -545,7 +545,7 @@ def update_manual_override(
             rec.index_provider = index_provider
             try:
                 rec.fund_type = FundType(fund_type)
-            except ValueError:
+            except (ValueError, TypeError):
                 pass
             rec.needs_review = needs_review
             rec.manual_override = True
@@ -559,8 +559,26 @@ def update_manual_override(
         else:
             new_list.append(r)
 
-    if updated_record:
+    if new_list:
         save_json(BENCHMARKS_JSON, new_list)
-        logger.info("Saved manual override for fund {}", fund_code)
-    return updated_record
 
+    # Also persist to company-specific JSON files if present
+    for cid in ("nomura", "daiwa", "muam"):
+        c_path = DATA_DIR / f"{cid}_benchmarks.json"
+        if c_path.exists():
+            c_raw = load_json(c_path, [])
+            c_updated = False
+            for idx, item in enumerate(c_raw):
+                if item.get("fund_code") == fund_code:
+                    c_raw[idx]["benchmark"] = benchmark
+                    c_raw[idx]["index_provider"] = index_provider
+                    c_raw[idx]["needs_review"] = needs_review
+                    c_raw[idx]["manual_override"] = True
+                    c_raw[idx]["review_comment"] = comment
+                    c_raw[idx]["is_msci"] = is_msci_benchmark(benchmark, index_provider)
+                    c_updated = True
+            if c_updated:
+                save_json(c_path, c_raw)
+
+    logger.info("Manual override saved for fund {}", fund_code)
+    return updated_record

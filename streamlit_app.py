@@ -731,25 +731,37 @@ def main() -> None:
 
                 orig = next((r for r in records if r.fund_code == code), None)
                 if orig and (orig.benchmark != bm or orig.index_provider != prov or orig.theme_category != theme or orig.top_distributors != dist or orig.sales_pitch_action != action or orig.needs_review != needs_rev or orig.review_comment != comm):
+                    orig.benchmark = bm
+                    orig.index_provider = prov
+                    orig.theme_category = theme
+                    orig.top_distributors = dist
+                    orig.sales_pitch_action = action
+                    orig.needs_review = needs_rev
+                    orig.review_comment = comm
+                    orig.manual_override = True
+                    orig.is_msci = "MSCI" in (bm or "").upper() or "MSCI" in (prov or "").upper()
+
+                    ft = orig.fund_type.value if hasattr(orig.fund_type, "value") else str(orig.fund_type or "インデックス型")
                     update_manual_override(
                         fund_code=code,
                         benchmark=bm,
                         index_provider=prov,
+                        fund_type=ft,
                         needs_review=needs_rev,
                         comment=comm,
                         reviewer="Streamlit Analyst",
                     )
-                    orig.theme_category = theme
-                    orig.top_distributors = dist
-                    orig.sales_pitch_action = action
                     updated_count += 1
 
             if updated_count > 0:
-                st.success(f"✅ {updated_count} 件の変更を保存しました!")
+                # Update Excel/CSV exports with newly edited data
+                run_stage6(records)
+                st.success(f"✅ {updated_count} 件の変更を保存し、Excelレポートを更新しました!")
                 st.session_state["cached_records"] = records
                 st.rerun()
             else:
                 st.info("変更はありませんでした。")
+
 
     # ═══════════════════════════════════════════════════════════════════════
     # TAB 4: PRODUCT PROPOSALS & BROKER MATCHMAKER
