@@ -53,37 +53,40 @@ SYSTEM_PROMPT = """\
 
 
 def get_available_providers() -> list[dict[str, Any]]:
-    """Return a list of configured and available LLM providers with status."""
-    providers = []
-    if ANTHROPIC_API_KEY:
-        providers.append({
-            "id": "anthropic",
-            "name": "Anthropic Claude",
-            "model": ANTHROPIC_MODEL,
-            "configured": True,
-        })
-    if GEMINI_API_KEY:
-        providers.append({
+    """Return a list of all supported LLM providers."""
+    import os
+    import app.config as cfg
+    gemini_key = os.getenv("GEMINI_API_KEY") or cfg.GEMINI_API_KEY
+    claude_key = os.getenv("ANTHROPIC_API_KEY") or cfg.ANTHROPIC_API_KEY
+    openai_key = os.getenv("OPENAI_API_KEY") or cfg.OPENAI_API_KEY
+
+    return [
+        {
             "id": "gemini",
             "name": "Google Gemini",
-            "model": GEMINI_MODEL,
-            "configured": True,
-        })
-    if OPENAI_API_KEY:
-        providers.append({
+            "model": "gemini-2.0-flash / 1.5-flash",
+            "configured": bool(gemini_key),
+        },
+        {
+            "id": "anthropic",
+            "name": "Anthropic Claude",
+            "model": "claude-3-5-sonnet",
+            "configured": bool(claude_key),
+        },
+        {
             "id": "openai",
             "name": "OpenAI",
-            "model": OPENAI_MODEL,
-            "configured": True,
-        })
-    # Ollama is local, always list as optional
-    providers.append({
-        "id": "ollama",
-        "name": "Ollama (Local LLM)",
-        "model": OLLAMA_MODEL,
-        "configured": bool(OLLAMA_BASE_URL),
-    })
-    return providers
+            "model": "gpt-4o-mini",
+            "configured": bool(openai_key),
+        },
+        {
+            "id": "ollama",
+            "name": "Ollama (Local LLM)",
+            "model": "llama3.2",
+            "configured": bool(cfg.OLLAMA_BASE_URL),
+        },
+    ]
+
 
 
 def llm_available(provider: str | None = None) -> bool:

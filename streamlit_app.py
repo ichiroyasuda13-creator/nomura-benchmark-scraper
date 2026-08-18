@@ -568,44 +568,7 @@ def main() -> None:
         st.divider()
         st.markdown("### ⚙️ TERMINAL ENGINE")
 
-        available_providers = get_available_providers()
-        prov_options = {"auto": "AUTO (Claude / Gemini / GPT)"}
-        for p in available_providers:
-            prov_options[p["id"]] = f"{p['name']} ({p['model']})"
-
-        selected_provider_key = st.selectbox(
-            "🤖 LLM EXTRACTOR",
-            options=list(prov_options.keys()),
-            format_func=lambda x: prov_options[x],
-            help="ベンチマーク抽出に使用するAIモデルを選択",
-        )
-        provider_arg = None if selected_provider_key == "auto" else selected_provider_key
-
-        max_funds_per_company = st.slider(
-            "Top N Funds per Manager",
-            min_value=5,
-            max_value=200,
-            value=50,
-            step=5,
-        )
-
-        workers = st.slider(
-            "Concurrent Workers",
-            min_value=1,
-            max_value=10,
-            value=5,
-            help="ネットワーク並行処理ワーカ数",
-        )
-
-        use_llm = st.toggle("LLM Inference Engine", value=True)
-        force = st.toggle("Force Re-Scrape (Bypass Cache)", value=False)
-
-        st.divider()
-        button_label = f"🚀 RUN PIPELINE ({len(selected_company_ids)} MANAGERS)"
-        run_clicked = st.button(button_label, type="primary", use_container_width=True)
-
-        st.divider()
-        with st.expander("🔑 API Key 設定 (Gemini / Claude / OpenAI)", expanded=not bool(GEMINI_API_KEY or ANTHROPIC_API_KEY)):
+        with st.expander("🔑 API Key 設定 (Gemini / Claude / OpenAI)", expanded=False):
             st.caption("Google AI Studio で無料取得できる Gemini API Key を入力すると、AI抽出が即座に有効化されます。")
             ui_gemini_key = st.text_input(
                 "Google Gemini API Key",
@@ -636,6 +599,42 @@ def main() -> None:
 
             st.markdown("[🔗 Google AI Studio で無料APIキーを取得](https://aistudio.google.com/app/apikey)")
 
+        prov_options = {
+            "gemini": "Google Gemini (gemini-2.0-flash / 1.5-flash)",
+            "anthropic": "Anthropic Claude (claude-3-5-sonnet)",
+            "openai": "OpenAI (gpt-4o-mini)",
+            "ollama": "Ollama (Local LLM / llama3.2)",
+            "auto": "AUTO (自動選択)",
+        }
+
+        selected_provider_key = st.selectbox(
+            "🤖 LLM EXTRACTOR",
+            options=list(prov_options.keys()),
+            format_func=lambda x: prov_options[x],
+            index=0,
+            help="ベンチマーク抽出に使用するAIモデルを選択",
+        )
+        provider_arg = None if selected_provider_key == "auto" else selected_provider_key
+
+        max_funds_per_company = st.slider(
+            "Top N Funds per Manager",
+            min_value=5,
+            max_value=200,
+            value=50,
+            step=5,
+        )
+
+        workers = st.slider(
+            "Concurrent Workers",
+            min_value=1,
+            max_value=10,
+            value=5,
+            help="ネットワーク並行処理ワーカ数",
+        )
+
+        use_llm = st.toggle("LLM Inference Engine", value=True)
+        force = st.toggle("Force Re-Scrape (Bypass Cache)", value=False)
+
         current_gemini = os.getenv("GEMINI_API_KEY") or GEMINI_API_KEY
         current_claude = os.getenv("ANTHROPIC_API_KEY") or ANTHROPIC_API_KEY
         current_openai = os.getenv("OPENAI_API_KEY") or OPENAI_API_KEY
@@ -645,6 +644,11 @@ def main() -> None:
         col_k1.caption(f"Gemini: {'🟢 READY' if current_gemini else '⚪ OFF'}")
         col_k2.caption(f"Claude: {'🟢 READY' if current_claude else '⚪ OFF'}")
         col_k1.caption(f"OpenAI: {'🟢 READY' if current_openai else '⚪ OFF'}")
+
+        st.divider()
+        button_label = f"🚀 RUN PIPELINE ({len(selected_company_ids)} MANAGERS)"
+        run_clicked = st.button(button_label, type="primary", use_container_width=True)
+
 
 
     # ── Run pipeline trigger ───────────────────────────────────────────────
