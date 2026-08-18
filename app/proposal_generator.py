@@ -49,10 +49,6 @@ def generate_product_proposals(
     company_name: str = "野村アセットマネジメント",
 ) -> list[dict[str, Any]]:
     """Analyze the current lineup of an asset manager, identify gaps, and generate pitch proposals."""
-    existing_themes = {r.theme_category for r in records if r.theme_category}
-    total_aum = sum(r.aum for r in records)
-    total_inflow = sum(r.estimated_net_inflow for r in records)
-
     proposals = []
 
     for theme, info in THEME_MSCI_RECOMMENDATIONS.items():
@@ -60,26 +56,34 @@ def generate_product_proposals(
         theme_aum = sum(r.aum for r in theme_records)
         theme_inflow = sum(r.estimated_net_inflow for r in theme_records)
 
-        has_theme = len(theme_records) > 0
-        status = "ラインアップあり" if has_theme else "⚠️ 未保有 (ギャップ)"
+        existing_count = len(theme_records)
+        msci_count = sum(1 for r in theme_records if r.is_msci)
 
-        # Priority scoring: Missing theme with high market demand gets high priority
-        if not has_theme:
+        # 3-Stage actionable classification
+        if existing_count == 0:
+            status = "🔴 未保有 (完全ギャップ)"
+            status_type = "gap"
             priority = "🔥 最優先提案 (新規組成)"
             opportunity_score = 95
-        elif theme_inflow > 0 and not any(r.is_msci for r in theme_records):
+        elif msci_count == 0:
+            status = "🟡 MSCI未採用 (リプレイス・新シリーズ)"
+            status_type = "non_msci"
             priority = "🎯 ベンチマーク切替・MSCI化提案"
             opportunity_score = 85
         else:
+            status = f"🟢 MSCI採用済み ({msci_count}本)"
+            status_type = "msci_adopted"
             priority = "🟢 既存拡販・シリーズ強化"
             opportunity_score = 70
 
         proposals.append({
             "theme": theme,
             "status": status,
+            "status_type": status_type,
             "priority": priority,
             "opportunity_score": opportunity_score,
-            "existing_funds_count": len(theme_records),
+            "existing_funds_count": existing_count,
+            "msci_funds_count": msci_count,
             "theme_aum_display": format_aum_oku(theme_aum) if theme_aum else "0円",
             "theme_inflow_display": format_inflow_oku(theme_inflow) if theme_inflow else "—",
             "recommended_msci_index": info["recommended_index"],
@@ -88,6 +92,6 @@ def generate_product_proposals(
             "action_plan": f"【提案方針】{info['best_brokers']} を主要販売パートナーとして、{info['recommended_index']} 連動型新商品の企画を {company_name} 商品企画部に打診する。",
         })
 
-    # Sort proposals by opportunity score
+    # Sort proposals by opportunity score descending
     proposals.sort(key=lambda x: x["opportunity_score"], reverse=True)
     return proposals

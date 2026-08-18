@@ -316,6 +316,16 @@ st.markdown("""
         font-size: 0.72rem;
         font-weight: 700;
     }
+    .bb-badge-amber {
+        font-family: 'JetBrains Mono', monospace;
+        background: rgba(251, 191, 36, 0.15);
+        color: #fbbf24;
+        border: 1px solid rgba(251, 191, 36, 0.3);
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.72rem;
+        font-weight: 700;
+    }
     .bb-badge-ok {
         font-family: 'JetBrains Mono', monospace;
         background: rgba(16, 185, 129, 0.15);
@@ -326,6 +336,7 @@ st.markdown("""
         font-size: 0.72rem;
         font-weight: 700;
     }
+
 
     /* OpenBB Terminal Sidebar */
     section[data-testid="stSidebar"] {
@@ -1052,8 +1063,14 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
         with col_p1:
             st.markdown(f"#### 🧩 {company_for_pitch} LINEUP GAP ANALYSIS")
             for prop in proposals:
-                is_gap = "ギャップ" in prop["status"]
-                badge_class = "bb-badge-gap" if is_gap else "bb-badge-ok"
+                st_type = prop.get("status_type", "gap")
+                if st_type == "gap":
+                    badge_class = "bb-badge-gap"
+                elif st_type == "non_msci":
+                    badge_class = "bb-badge-amber"
+                else:
+                    badge_class = "bb-badge-ok"
+
                 st.markdown(f"""
                 <div class="bb-pitch-box">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -1061,7 +1078,7 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
                         <span class="{badge_class}">{prop['status']}</span>
                     </div>
                     <div style="font-size: 0.84rem; color: #94a3b8; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace;">
-                        自社現保有: <b style="color: #f1f5f9;">{prop['existing_funds_count']} 本</b> ｜ AUM: <b style="color: #f1f5f9;">{prop['theme_aum_display']}</b> ｜ 買い付け金額: <b style="color: #00F5D4;">{prop['theme_inflow_display']}</b>
+                        自社現保有: <b style="color: #f1f5f9;">{prop['existing_funds_count']} 本</b> (うちMSCI採用: <b style="color: {'#34d399' if prop['msci_funds_count'] > 0 else '#fb7185'};">{prop['msci_funds_count']} 本</b>) ｜ AUM: <b style="color: #f1f5f9;">{prop['theme_aum_display']}</b> ｜ 買い付け金額: <b style="color: #00F5D4;">{prop['theme_inflow_display']}</b>
                     </div>
                     <div style="background: #0d111a; border: 1px solid var(--bb-border); padding: 10px 14px; border-radius: 6px; font-size: 0.85rem; margin-top: 8px;">
                         <div style="margin-bottom: 4px;"><b style="color: #00F5D4;">推奨MSCI指数:</b> <span style="color: #e2e8f0; font-family: 'JetBrains Mono', monospace;">{prop['recommended_msci_index']}</span></div>
@@ -1070,6 +1087,7 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+
 
         with col_p2:
             st.markdown("#### 🏢 販社 × テーマ別 売れ行きマトリクス")
