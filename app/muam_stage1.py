@@ -67,16 +67,30 @@ def run_stage1_muam(
         detail_url = f"https://www.am.mufg.jp/fund/{fund_code}.html"
         prospectus_url = f"https://www.am.mufg.jp/pdf/koumokuromi/{fund_code}.pdf"
 
+        def _to_float(val: Any) -> float | None:
+            if val is None or val == "":
+                return None
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return None
+
+
         funds.append(Fund(
             fund_name=fund_name,
             fund_code=fund_code,
             nam_code=fund_code,
+            management_company="三菱UFJアセットマネジメント",
             isin_code=isin,
             aum=net_asset,
             nav=nav,
             is_etf=is_etf,
             detail_url=detail_url,
             prospectus_pdf_url=prospectus_url,
+            return_1m=_to_float(item.get("cfsd_fluctuation_rate_1m")),
+            return_3m=_to_float(item.get("cfsd_fluctuation_rate_3m")),
+            return_6m=_to_float(item.get("cfsd_fluctuation_rate_6m")),
+            return_1y=_to_float(item.get("cfsd_fluctuation_rate_1y")),
         ))
 
     # AUM降順ソート
@@ -85,4 +99,17 @@ def run_stage1_muam(
     logger.info("Stage1 (MUAM): Selected top {} funds (Max AUM: {:.1f}億円)", len(selected), (selected[0].aum or 0) / 1e8)
 
     save_json(target_out, [f.model_dump(mode="json") for f in selected])
+
+    from app.timeseries_store import append_snapshot
+    from datetime import date as dt_date
+    today_str = dt_date.today().isoformat()
+    for f in selected:
+        append_snapshot(
+            fund_code=f.fund_code,
+            date=today_str,
+            aum=f.aum,
+            nav=f.nav,
+        )
+
     return selected
+

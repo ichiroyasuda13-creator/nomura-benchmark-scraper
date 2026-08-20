@@ -136,7 +136,6 @@ def _call_anthropic(prompt: str, model: str) -> str:
         message = client.messages.create(
             model=model,
             max_tokens=1200,
-            temperature=0,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -152,7 +151,6 @@ def _call_anthropic(prompt: str, model: str) -> str:
         payload = {
             "model": model,
             "max_tokens": 1200,
-            "temperature": 0,
             "system": SYSTEM_PROMPT,
             "messages": [{"role": "user", "content": prompt}],
         }
@@ -161,6 +159,7 @@ def _call_anthropic(prompt: str, model: str) -> str:
             resp.raise_for_status()
             data = resp.json()
             return data["content"][0]["text"]
+
 
 
 def _call_openai(prompt: str, model: str) -> str:
@@ -308,4 +307,65 @@ def extract_with_llm(
 
     logger.error("LLM extraction failed for {} using {}: {}", fund_name, active_provider, last_error)
     return None
+
+
+def extract_distributors_with_llm(
+    *,
+    fund_name: str,
+    text: str,
+    provider: str | None = None,
+    model: str | None = None,
+    max_retries: int = 2,
+) -> tuple[list[str], float]:
+    """Extract distributor company names from prospectus text using LLM.
+
+    Strict instruction: Only return names explicitly written in the text.
+    Do NOT guess or hallucinate unmentioned companies.
+    """
+    active_provider = resolve_active_provider(provider)
+    if not active_provider:
+        return [], 0.0
+
+    prompt_data = {
+        "fund_name": fund_name,
+        "prospectus_text": text[:12000],
+        "instruction": (
+            "テキスト内に明記されている販売会社・取扱金融機関・指定参加者（証券会社・銀行・保険等）の社名のみを抽出してください。\n"
+            "テキストに明記されていない社名の推測や補完は厳禁です。\n"
+            "特定の販売会社名が記載されていない（例：『販売会社にご確認ください』等のみの）場合は空リスト [] を返してください。\n"
+            "JSON形式: {\"distributors\": [\"社名1\", \"社名2\", ...]}"
+        ),
+    }
+    user_prompt = json.dumps(prompt_data, ensure_ascii=False)
+
+    if active_provider == "anthropic":
+        active_model = model or ANTHROPIC_MODEL
+        call_fn = lambda p: _call_anthropic(p, active_model)
+    elif active_provider == "gemini":
+        active_model = model or GEMINI_MODEL
+        call_fn = lambda p: _call_gemini(p, active_model)
+    elif active_provider == "openai":
+        active_model = model or OPENAI_MODEL
+        call_fn = lambda p: _call_openai(p, active_model)
+    elif active_provider == "ollama":
+        active_model = model or OLLAMA_MODEL
+        call_fn = lambda p: _call_ollama(p, active_model)
+    else:
+        return [], 0.0
+
+    for attempt in range(1, max_retries + 1):
+        try:
+            content = call_fn(user_prompt)
+            payload = _extract_json(content)
+            dist_list = payload.get("distributors", [])
+            if isinstance(dist_list, list):
+                cleaned = [str(d).strip() for d in dist_list if str(d).strip()]
+                if cleaned:
+                    return cleaned, 0.8
+                return [], 0.0
+        except Exception as exc:
+            logger.warning("Distributor LLM extraction failed (attempt {}): {}", attempt, exc)
+
+    return [], 0.0
+
 

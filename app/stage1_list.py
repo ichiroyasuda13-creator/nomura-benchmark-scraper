@@ -54,19 +54,38 @@ def fetch_all_funds(client: HttpClient | None = None) -> list[dict[str, Any]]:
     return section.get("data") or []
 
 
+def _to_float(val: Any) -> float | None:
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (ValueError, TypeError):
+        return None
+
+
 def raw_to_fund(raw: dict[str, Any], rank: int) -> Fund:
     aum = parse_aum_yen(raw.get("SRTTotalNetAsset"))
+    company_codes_raw = str(raw.get("CompanyCode", "")).strip()
+    company_codes = company_codes_raw.split() if company_codes_raw else []
     return Fund(
         fund_name=str(raw.get("FundName", "")).strip(),
         fund_code=str(raw.get("FundCode", "")).strip(),
         nam_code=_extract_nam_code(raw),
+        management_company="野村アセットマネジメント",
+        company_codes=company_codes,
         aum=aum,
         aum_display=str(raw.get("TotalNetAsset", "")).strip(),
         aum_date=parse_japanese_date(str(raw.get("ReferenceDate", ""))),
         detail_url=_normalize_detail_url(str(raw.get("DetailUrl", ""))),
         is_etf=_is_etf(raw),
         rank=rank,
+        return_1m=_to_float(raw.get("SRTReturn1M")),
+        return_3m=_to_float(raw.get("SRTReturn3M")),
+        return_6m=_to_float(raw.get("SRTReturn6M")),
+        return_1y=_to_float(raw.get("SRTReturn1Y")),
     )
+
+
 
 
 def run_stage1(*, force: bool = False, max_funds: int = MAX_FUNDS) -> list[Fund]:
@@ -86,6 +105,20 @@ def run_stage1(*, force: bool = False, max_funds: int = MAX_FUNDS) -> list[Fund]
     )
     top = sorted_funds[:max_funds]
     funds = [raw_to_fund(raw, rank=index + 1) for index, raw in enumerate(top)]
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     save_json(FUNDS_JSON, [fund.model_dump(mode="json") for fund in funds])
     logger.info("Stage1: saved {} funds to {}", len(funds), FUNDS_JSON)
+
+    from app.timeseries_store import append_snapshot
+    from datetime import date as dt_date
+    today_str = dt_date.today().isoformat()
+    for f in funds:
+        date_str = f.aum_date.isoformat() if f.aum_date else today_str
+        append_snapshot(
+            fund_code=f.fund_code,
+            date=date_str,
+            aum=f.aum,
+            nav=f.nav,
+        )
+
     return funds

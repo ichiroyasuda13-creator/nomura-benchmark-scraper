@@ -24,8 +24,15 @@ from app.distributors import (
     get_funds_grouped_by_distributor,
 )
 from app.http_client import load_json
-from app.models import BenchmarkRecord, format_aum_oku, format_inflow_oku
+from app.config import BENCHMARKS_JSON, OUTPUT_DIR
+from app.distributors import (
+    build_broker_theme_sales_matrix,
+    get_funds_grouped_by_distributor,
+)
+from app.http_client import load_json
+from app.models import BenchmarkRecord, DataProvenance, format_aum_oku, format_inflow_oku
 from app.proposal_generator import generate_product_proposals
+
 
 OUTPUT_COLUMNS = [
     "rank",
@@ -110,17 +117,76 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
 
     company_name = records[0].management_company if records else "野村アセットマネジメント"
 
-    # ── Sheet 1: All Funds (ファンド一覧) ─────────────────────────────────
-    ws1 = wb.active
-    ws1.title = "ファンド一覧"
+    # Determine if inflow provenance is ESTIMATED or SYNTHETIC
+    is_estimated = not records or any(
+        getattr(r, "inflow_provenance", DataProvenance.ESTIMATED) in (DataProvenance.ESTIMATED, DataProvenance.SYNTHETIC)
+        for r in records
+    )
+    inflow_header_name = "買い付け金額 (推計) (億円)" if is_estimated else "買い付け金額 (億円)"
+
+    # ── Sheet 1: Market Summary (マーケットサマリー) ───────────────────────
+    ws0 = wb.active
+    ws0.title = "マーケットサマリー"
+
+    note_cell = ws0.cell(
+        row=1,
+        column=1,
+        value="※買い付け金額・販売会社情報は現時点では推計値であり、実測値ではありません。",
+    )
+    note_cell.font = Font(name="Meiryo UI", size=10, italic=True, bold=True, color="DC2626")
+    ws0.row_dimensions[1].height = 24
+
+    # Summary KPI Table
+    total_aum_oku = round(sum(r.aum for r in records) / 1e8, 1) if records else 0.0
+    total_inflow_oku = round(sum(r.estimated_net_inflow for r in records) / 1e8, 1) if records else 0.0
+    msci_funds = [r for r in records if r.is_msci]
+    msci_aum_oku = round(sum(r.aum for r in msci_funds) / 1e8, 1) if msci_funds else 0.0
+    msci_share_pct = round(msci_aum_oku / total_aum_oku * 100, 1) if total_aum_oku > 0 else 0.0
+
+    summary_headers = ["指標項目", "集計値"]
+    ws0.cell(row=3, column=1, value=summary_headers[0])
+    ws0.cell(row=3, column=2, value=summary_headers[1])
+    _style_header(ws0, 3, 2, fill_color="1E293B")
+
+    summary_metrics = [
+        ("対象運用会社", company_name),
+        ("集計ファンド数", f"{len(records)} 本"),
+        ("純資産総額 (億円)", total_aum_oku),
+        (f"合計{inflow_header_name}", total_inflow_oku),
+        ("MSCI採用ファンド数", f"{len(msci_funds)} 本"),
+        ("MSCI採用 純資産総額 (億円)", msci_aum_oku),
+        ("MSCI残高シェア", f"{msci_share_pct} %"),
+    ]
+
+    for s_idx, (lbl, val) in enumerate(summary_metrics, start=4):
+        c1 = ws0.cell(row=s_idx, column=1, value=lbl)
+        c2 = ws0.cell(row=s_idx, column=2, value=val)
+        c1.font = regular_font
+        c2.font = regular_font
+        c1.border = thin_border
+        c2.border = thin_border
+        if s_idx % 2 == 1:
+            c1.fill = zebra_fill
+            c2.fill = zebra_fill
+        if isinstance(val, (int, float)):
+            c2.number_format = "+#,##0.0;-#,##0.0;0.0"
+            c2.alignment = Alignment(horizontal="right")
+        else:
+            c2.alignment = Alignment(horizontal="center")
+
+    _auto_fit_columns(ws0)
+
+    # ── Sheet 2: All Funds (ファンド一覧) ─────────────────────────────────
+    ws1 = wb.create_sheet(title="ファンド一覧")
 
     headers1 = [
-        "順位", "運用会社", "ファンド名", "コード", "純資産 (億円)", "買い付け金額 (億円)", "運用効果 (億円)",
+        "順位", "運用会社", "ファンド名", "コード", "純資産 (億円)", inflow_header_name, "運用効果 (億円)",
         "テーマ分類", "ベンチマーク指数", "指数提供者", "MSCI採用", "主要販売会社 (Broker)", "営業ターゲット判定",
         "信頼度", "交付目論見書PDF",
     ]
     ws1.append(headers1)
     _style_header(ws1, 1, len(headers1), fill_color="1E293B")
+
 
     for row_idx, r in enumerate(records, start=2):
         oku_aum = round(r.aum / 1e8, 1) if r.aum else 0.0
@@ -166,10 +232,10 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
 
     _auto_fit_columns(ws1)
 
-    # ── Sheet 2: MSCI Sales Targets (MSCI営業ターゲット) ─────────────────
+    # ── Sheet 3: MSCI Sales Targets (MSCI営業ターゲット) ─────────────────
     ws2 = wb.create_sheet(title="MSCI営業ターゲット")
     headers2 = [
-        "順位", "運用会社", "ファンド名", "コード", "純資産 (億円)", "買い付け金額 (億円)", "テーマ分類",
+        "順位", "運用会社", "ファンド名", "コード", "純資産 (億円)", inflow_header_name, "テーマ分類",
         "現在のベンチマーク", "現在の指数提供者", "主要販売会社 (攻めどころ)", "営業提案アクション (Who to Call)",
     ]
     ws2.append(headers2)
@@ -210,7 +276,7 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
 
     _auto_fit_columns(ws2)
 
-    # ── Sheet 3: Distributor Rankings (販売会社別ファンド一覧) ────────────
+    # ── Sheet 4: Distributor Rankings (販売会社別ファンド一覧) ────────────
     ws3 = wb.create_sheet(title="販売会社別ファンド一覧")
     current_row = 1
 
@@ -220,12 +286,12 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
         sec_cell = ws3.cell(row=current_row, column=1, value=f"🏛️ {dist_name} 取扱上位ファンド（残高順）")
         sec_cell.font = Font(name="Meiryo UI", size=11, bold=True, color="FFFFFF")
         sec_cell.fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
-        ws3.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=8)
+        ws3.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=7)
         ws3.row_dimensions[current_row].height = 24
         current_row += 1
 
         # Table Header
-        dist_headers = ["順位", "運用商品名 (ファンド名)", "運用会社", "残高 (億円)", "買い付け金額 (億円)", "ベンチマーク指数", "MSCI採用", "提案戦略"]
+        dist_headers = ["順位", "運用商品名 (ファンド名)", "運用会社", "残高 (億円)", "ベンチマーク指数", "MSCI採用", "提案戦略"]
         for c_idx, h in enumerate(dist_headers, start=1):
             c = ws3.cell(row=current_row, column=c_idx, value=h)
             c.font = Font(name="Meiryo UI", size=9, bold=True, color="FFFFFF")
@@ -241,7 +307,6 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
                 f["fund_name"],
                 f["management_company"],
                 f["aum_oku"],
-                f["inflow_oku"],
                 f["benchmark"],
                 "はい" if f["is_msci"] else "いいえ",
                 f["action"],
@@ -250,29 +315,31 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
                 cell = ws3.cell(row=current_row, column=c_idx, value=val)
                 cell.font = regular_font
                 cell.border = thin_border
-                if c_idx in (4, 5):
+                if c_idx == 4:
                     cell.number_format = "+#,##0.0;-#,##0.0;0.0"
                     cell.alignment = Alignment(horizontal="right")
-                elif c_idx in (1, 3, 7):
+                elif c_idx in (1, 3, 6):
                     cell.alignment = Alignment(horizontal="center")
-                if c_idx == 7 and f["is_msci"]:
+                if c_idx == 6 and f["is_msci"]:
                     cell.fill = msci_yes_fill
                     cell.font = msci_yes_font
-                elif c_idx == 7 and not f["is_msci"]:
+                elif c_idx == 6 and not f["is_msci"]:
                     cell.fill = target_fill
                     cell.font = target_font
             current_row += 1
+
 
         # Blank line between distributor blocks
         current_row += 1
 
     _auto_fit_columns(ws3)
 
-    # ── Sheet 4: Broker x Theme Sales Matrix (販社×テーマ別売れ行き) ────────
+    # ── Sheet 5: Broker x Theme Sales Matrix (販社×テーマ別売れ行き) ────────
     ws4 = wb.create_sheet(title="販社×テーマ別売れ行き")
     headers4 = [
-        "主要販売会社 (Broker)", "得意テーマ分類", "取扱本数", "純資産総額 (億円)", "買い付け金額 (億円)", "商品企画・組成推奨戦略",
+        "主要販売会社 (Broker)", "得意テーマ分類", "取扱本数", "純資産総額 (億円)", inflow_header_name, "商品企画・組成推奨戦略",
     ]
+
     ws4.append(headers4)
     _style_header(ws4, 1, len(headers4), fill_color="4338CA")
 
@@ -330,15 +397,56 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
             cell.border = thin_border
             if row_idx % 2 == 1:
                 cell.fill = zebra_fill
-            if col_idx in (1, 2, 3):
-                cell.alignment = Alignment(horizontal="center")
-            if "最優先" in str(prop["priority"]) and col_idx == 3:
-                cell.fill = target_fill
-                cell.font = target_font
-
     _auto_fit_columns(ws5)
 
+    # ── Sheet 7: Needs Review Funds (要確認ファンド) ──────────────────────────
+    needs_review_records = [r for r in records if r.needs_review]
+    if needs_review_records:
+        ws6 = wb.create_sheet(title="要確認ファンド")
+        headers6 = [
+            "順位", "運用会社", "ファンド名", "コード", "残高 (億円)", "ベンチマーク", "確認理由", "目論見書PDF",
+        ]
+        ws6.append(headers6)
+        _style_header(ws6, 1, len(headers6), fill_color="DC2626")
+
+        for row_idx, r in enumerate(needs_review_records, start=2):
+            oku_aum = round(r.aum / 1e8, 1) if r.aum else 0.0
+            reasons = []
+            if not r.benchmark or (hasattr(r.confidence, "value") and r.confidence.value == "low") or str(r.confidence).lower() == "low":
+                reasons.append("ベンチマーク低信頼度・未特定")
+            if not r.top_distributors or (hasattr(r.distributor_provenance, "value") and r.distributor_provenance.value == "synthetic") or str(r.distributor_provenance).lower() == "synthetic":
+                reasons.append("販売会社未取得（推計フォールバック中）")
+            reason_str = " / ".join(reasons) if reasons else "要確認"
+
+            row_data = [
+                r.rank,
+                r.management_company,
+                r.fund_name,
+                r.fund_code,
+                oku_aum,
+                r.benchmark or "—",
+                reason_str,
+                r.prospectus_pdf_url or "",
+            ]
+            ws6.append(row_data)
+            for col_idx in range(1, len(headers6) + 1):
+                cell = ws6.cell(row=row_idx, column=col_idx)
+                cell.font = regular_font
+                cell.border = thin_border
+                if row_idx % 2 == 1:
+                    cell.fill = zebra_fill
+                if col_idx == 5:
+                    cell.number_format = "+#,##0.0;-#,##0.0;0.0"
+                    cell.alignment = Alignment(horizontal="right")
+                elif col_idx in (1, 2, 4):
+                    cell.alignment = Alignment(horizontal="center")
+                if col_idx == 7:
+                    cell.font = Font(name="Meiryo UI", size=9, bold=True, color="DC2626")
+
+        _auto_fit_columns(ws6)
+
     wb.save(filepath)
+
 
 
 def run_stage6(records: list[BenchmarkRecord] | None = None) -> tuple[Path, Path]:

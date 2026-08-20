@@ -95,7 +95,7 @@ def estimate_fund_flow_from_returns(
     return_pct_1y: float | None = None,
     return_pct_1m: float | None = None,
 ) -> tuple[float, float, float]:
-    """Estimate monthly or annual flow for funds when full timeseries is not locally cached."""
+    """本番未使用。時系列不足時の参考値。Estimate monthly or annual flow for funds when full timeseries is not locally cached."""
     if aum <= 0:
         return 0.0, 0.0, 0.0
 
@@ -118,7 +118,7 @@ def generate_daily_flow_timeseries(
     nav: float = 20000.0,
     days: int = 30,
 ) -> list[dict[str, Any]]:
-    """Generate realistic daily flow time series for visualization over the selected period."""
+    """【本番未使用。デモ・UI開発用】Generate realistic daily flow time series for visualization."""
     if nav <= 0:
         nav = 20000.0
     if aum <= 0:

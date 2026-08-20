@@ -15,13 +15,16 @@ from app.models import (
     BenchmarkExtraction,
     BenchmarkRecord,
     Confidence,
+    DataProvenance,
     ExtractionMethod,
     Fund,
     FundType,
 )
-from app.distributors import resolve_fund_distributors
+from app.distributor_master import fetch_distributor_master
+from app.distributors import resolve_distributors_from_codes, resolve_fund_distributors
 from app.flow_calculator import estimate_fund_flow_from_returns
 from app.theme_classifier import classify_fund_theme
+
 from app.providers import (
     BENCHMARK_CANDIDATE_PATTERNS,
     NEGATIVE_BENCHMARK_PATTERNS,
@@ -279,20 +282,99 @@ def _finalize_extraction(
 
     if fund:
         extraction.theme_category = classify_fund_theme(fund.fund_name, extraction.benchmark or "")
-        top_dist, primary, action = resolve_fund_distributors(
-            fund.fund_name,
-            fund.management_company,
-            fund.is_etf,
-        )
-        aum_chg, perf, flow = estimate_fund_flow_from_returns(fund.aum)
-        extraction.top_distributors = top_dist
-        extraction.primary_broker = primary
-        extraction.sales_pitch_action = action
-        extraction.estimated_net_inflow = flow
-        extraction.performance_effect = perf
-        extraction.aum_change = aum_chg
+
+        if fund.company_codes:
+            master = fetch_distributor_master()
+            sec_list, bank_list, ins_list = resolve_distributors_from_codes(fund.company_codes, master)
+            all_resolved = sec_list + bank_list + ins_list
+            if all_resolved:
+                extraction.top_distributors = ", ".join(all_resolved)
+                extraction.primary_broker = sec_list[0] if sec_list else (bank_list[0] if bank_list else all_resolved[0])
+                extraction.sales_pitch_action = (
+                    "既存採用（防衛）" if extraction.is_msci else f"🎯 {extraction.primary_broker}等 取扱販社へアプローチ"
+                )
+                extraction.distributor_provenance = DataProvenance.ACTUAL
+            else:
+                top_dist, primary, action = resolve_fund_distributors(
+                    fund.fund_name,
+                    fund.management_company or "野村アセットマネジメント",
+                    fund.is_etf,
+                )
+                extraction.top_distributors = top_dist
+                extraction.primary_broker = primary
+                extraction.sales_pitch_action = action
+                extraction.distributor_provenance = DataProvenance.SYNTHETIC
+        elif fund.management_company in ("大和アセットマネジメント", "三菱UFJアセットマネジメント", "三菱ＵＦＪアセットマネジメント"):
+            from app.distributor_extractor import extract_distributors_with_fallback
+            from app.config import TEXT_DIR
+            text_path = TEXT_DIR / f"{fund.fund_code}.txt"
+            text_content = text_path.read_text(encoding="utf-8") if text_path.exists() else ""
+
+            dists, conf, prov_type = extract_distributors_with_fallback(
+                fund.fund_name,
+                text_content,
+            )
+            if dists and prov_type == "ACTUAL":
+                extraction.top_distributors = ", ".join(dists)
+                extraction.primary_broker = dists[0]
+                extraction.sales_pitch_action = (
+                    "既存採用（防衛）" if extraction.is_msci else f"🎯 {extraction.primary_broker}等 取扱販社へアプローチ"
+                )
+                extraction.distributor_provenance = DataProvenance.ACTUAL
+            elif dists and prov_type == "DERIVED":
+                extraction.top_distributors = ", ".join(dists)
+                extraction.primary_broker = dists[0]
+                extraction.sales_pitch_action = (
+                    "既存採用（防衛）" if extraction.is_msci else f"🎯 {extraction.primary_broker}等 取扱販社へアプローチ"
+                )
+                extraction.distributor_provenance = DataProvenance.DERIVED
+            else:
+                top_dist, primary, action = resolve_fund_distributors(
+                    fund.fund_name,
+                    fund.management_company,
+                    fund.is_etf,
+                )
+                extraction.top_distributors = top_dist
+                extraction.primary_broker = primary
+                extraction.sales_pitch_action = action
+                extraction.distributor_provenance = DataProvenance.SYNTHETIC
+                extraction.needs_review = True
+        else:
+            top_dist, primary, action = resolve_fund_distributors(
+                fund.fund_name,
+                fund.management_company or "野村アセットマネジメント",
+                fund.is_etf,
+            )
+            extraction.top_distributors = top_dist
+            extraction.primary_broker = primary
+            extraction.sales_pitch_action = action
+            extraction.distributor_provenance = DataProvenance.SYNTHETIC
+
+
+        from app.timeseries_store import load_series
+        from app.flow_calculator import calculate_daily_net_flows
+        series = load_series(fund.fund_code, days=30)
+        if len(series) >= 2:
+            aum_chg, perf, flow = calculate_daily_net_flows(series)
+            extraction.aum_change = aum_chg
+            extraction.performance_effect = perf
+            extraction.estimated_net_inflow = flow
+            extraction.inflow_provenance = DataProvenance.ACTUAL
+            extraction.perf_effect_provenance = DataProvenance.ACTUAL
+            extraction.timeseries_provenance = DataProvenance.ACTUAL
+        else:
+            # 2営業日未満のファンドは買い付け金額を None、inflow_provenance を NOT_AVAILABLE として扱う
+            ret = (fund.return_1m if fund.return_1m is not None else (fund.return_1y or 0.0) / 12.0) / 100.0
+            perf_effect = fund.aum * ret if fund.aum > 0 else 0.0
+            extraction.performance_effect = perf_effect
+            extraction.perf_effect_provenance = DataProvenance.DERIVED if (fund.return_1m is not None or fund.return_1y is not None) else DataProvenance.NOT_AVAILABLE
+            extraction.estimated_net_inflow = None
+            extraction.inflow_provenance = DataProvenance.NOT_AVAILABLE
+            extraction.aum_change = perf_effect
+            extraction.timeseries_provenance = DataProvenance.NOT_AVAILABLE
 
     return extraction
+
 
 
 

@@ -6,16 +6,17 @@ OpenBB Terminal Pro Theme & Architecture:
 - 期間切り替え機能: 直近1ヶ月 (1M) ｜ 直近3ヶ月 (3M) ｜ 年初来 (YTD) ｜ 過去1年間 (1Y)
 - ファンド別 日次買い付け推移 & 累積フロー推移インタラクティブ可視化 (OpenBB Terminal Style)
 - Distributor-by-Distributor Fund Rankings (主要販売会社別ランキング)
-- 買い付け金額（推定純流入） & 運用効果の精密計算
+- 買い付け金額（推定純流入） & 運用効果の精密計算 & データ来歴 (DataProvenance) 表示
 - Broker & Distributor Intelligence (主要販売会社 & 販社別売れ行きマトリクス)
 - Theme & Gap Analysis for Consultative Product Proposals
-- Interactive Data Editor & 5-Sheet Styled Excel Generation
+- Interactive Data Editor & 7-Sheet Styled Excel Generation
 """
 
 from __future__ import annotations
 
 import io
 import json
+import os
 import sys
 import time
 from datetime import datetime
@@ -31,7 +32,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
 
 # ── Ensure project root is importable ──────────────────────────────────────
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -59,6 +59,7 @@ try:
         resolve_fund_distributors,
     )
     from app.flow_calculator import (
+        calculate_daily_net_flows,
         estimate_fund_flow_from_returns,
         generate_daily_flow_timeseries,
     )
@@ -67,6 +68,7 @@ try:
     from app.models import (
         BenchmarkRecord,
         Confidence,
+        DataProvenance,
         Fund,
         FundType,
         format_aum_oku,
@@ -75,308 +77,215 @@ try:
     from app.muam_stage1 import run_stage1_muam
     from app.proposal_generator import generate_product_proposals
     from app.stage5_benchmark import reextract_single_fund, update_manual_override
-    from app.stage6_output import run_stage6
+    from app.stage6_output import create_styled_excel, run_stage6
     from app.theme_classifier import THEMES, classify_fund_theme
+    from app.timeseries_store import append_snapshot, load_series
 except Exception as _import_err:
-    st.error(f"⚠️ 初期化インポートエラー: {_import_err}")
-    st.exception(_import_err)
+    st.error(f"❌ モジュールインポートエラー: {_import_err}")
+    st.info("💡 仮想環境 `.venv` が有効化されているか、必要なパッケージがインストールされているか確認してください。")
     st.stop()
 
 
 # ── OpenBB Terminal Signature CSS ──────────────────────────────────────────
-st.markdown("""
+TERMINAL_CSS = """
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-    /* Global Root Variables */
-    :root {
-        --bb-bg-base: #0a0d14;
-        --bb-bg-card: #10141e;
-        --bb-bg-card-hover: #151a27;
-        --bb-border: #1e2638;
-        --bb-border-active: #00F5D4;
-        --bb-teal: #00F5D4;
-        --bb-teal-glow: rgba(0, 245, 212, 0.15);
-        --bb-indigo: #818cf8;
-        --bb-amber: #FBBF24;
-        --bb-crimson: #F43F5E;
-        --bb-emerald: #10B981;
-        --bb-text-main: #f1f5f9;
-        --bb-text-muted: #94a3b8;
-        --bb-text-sub: #64748b;
-    }
+:root {
+    --bg-main: #080a0f;
+    --bg-card: #0f131c;
+    --bg-card-hover: #161c28;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --border-glow: rgba(0, 245, 212, 0.25);
+    --accent-teal: #00F5D4;
+    --accent-indigo: #818cf8;
+    --accent-amber: #FFB703;
+    --accent-rose: #f43f5e;
+    --accent-emerald: #10B981;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+}
 
-    html, body, [class*="css"] {
-        font-family: 'Plus Jakarta Sans', 'Noto Sans JP', sans-serif;
-    }
+html, body, [class*="st-"] {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--text-primary);
+}
 
-    /* OpenBB Space Ambient Glow Background */
-    .stApp {
-        background-color: var(--bb-bg-base);
-        background-image: 
-            radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.08) 0%, transparent 45%),
-            radial-gradient(circle at 85% 20%, rgba(0, 245, 212, 0.06) 0%, transparent 40%),
-            radial-gradient(circle at 50% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 50%);
-        background-attachment: fixed;
-        color: var(--bb-text-main);
-    }
+code, kbd, samp, pre {
+    font-family: 'JetBrains Mono', monospace !important;
+}
 
-    /* OpenBB Top Terminal Header */
-    .openbb-header {
-        background: linear-gradient(180deg, rgba(16, 20, 30, 0.85) 0%, rgba(10, 13, 20, 0.95) 100%);
-        border: 1px solid var(--bb-border);
-        border-radius: 12px;
-        padding: 1.2rem 1.8rem;
-        margin-bottom: 1.4rem;
-        box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6);
-        backdrop-filter: blur(20px);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        position: relative;
-        overflow: hidden;
-    }
-    .openbb-header::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0;
-        height: 2px;
-        background: linear-gradient(90deg, #00F5D4, #818cf8, #FBBF24, transparent);
-    }
-    .openbb-logo-brand {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-    }
-    .openbb-icon-glyph {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 1.6rem;
-        font-weight: 800;
-        color: #00F5D4;
-        background: rgba(0, 245, 212, 0.1);
-        border: 1px solid rgba(0, 245, 212, 0.3);
-        padding: 4px 10px;
-        border-radius: 8px;
-        letter-spacing: -0.05em;
-    }
-    .openbb-title-h1 {
-        font-size: 1.7rem;
-        font-weight: 800;
-        letter-spacing: -0.03em;
-        color: #ffffff;
-        margin: 0;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    .openbb-title-tag {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.70rem;
-        font-weight: 700;
-        padding: 2px 8px;
-        border-radius: 4px;
-        background: rgba(0, 245, 212, 0.12);
-        color: #00F5D4;
-        border: 1px solid rgba(0, 245, 212, 0.3);
-    }
-    .openbb-header-meta {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.78rem;
-        color: var(--bb-text-muted);
-        text-align: right;
-        line-height: 1.6;
-    }
+.main, .stApp {
+    background-color: var(--bg-main);
+    background-image: 
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 245, 212, 0.07), transparent 70%),
+        radial-gradient(ellipse 60% 40% at 100% 100%, rgba(129, 140, 248, 0.05), transparent 70%);
+}
 
-    /* OpenBB Terminal CLI Command Line Bar */
-    .cli-bar {
-        background: #0d111a;
-        border: 1px solid var(--bb-border);
-        border-radius: 8px;
-        padding: 8px 16px;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.82rem;
-        color: var(--bb-teal);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        margin-bottom: 1.2rem;
-    }
-    .cli-prompt {
-        color: var(--bb-text-sub);
-    }
+.stTabs [data-baseweb="tab-list"] {
+    background: rgba(15, 19, 28, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 6px;
+    gap: 8px;
+}
 
-    /* OpenBB Terminal KPI Widgets Grid */
-    .bb-kpi-grid {
-        display: grid;
-        grid-template-columns: repeat(5, 1fr);
-        gap: 0.85rem;
-        margin-bottom: 1.4rem;
-    }
-    .bb-kpi-widget {
-        background: var(--bb-bg-card);
-        border: 1px solid var(--bb-border);
-        border-radius: 10px;
-        padding: 1.1rem 0.9rem;
-        text-align: left;
-        position: relative;
-        overflow: hidden;
-        transition: all 0.2s ease;
-    }
-    .bb-kpi-widget:hover {
-        background: var(--bb-bg-card-hover);
-        border-color: rgba(0, 245, 212, 0.4);
-        transform: translateY(-2px);
-    }
-    .bb-kpi-widget-topline {
-        position: absolute;
-        top: 0; left: 0; right: 0;
-        height: 2px;
-    }
-    .topline-teal { background: #00F5D4; }
-    .topline-emerald { background: #10B981; }
-    .topline-indigo { background: #818cf8; }
-    .topline-amber { background: #FBBF24; }
-    .topline-slate { background: #64748b; }
+.stTabs [data-baseweb="tab"] {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    border-radius: 8px;
+    padding: 8px 16px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
-    .bb-kpi-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 6px;
-    }
-    .bb-kpi-label {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.70rem;
-        font-weight: 700;
-        color: var(--bb-text-muted);
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-    }
-    .bb-kpi-tag {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.65rem;
-        padding: 1px 6px;
-        border-radius: 3px;
-        background: rgba(255, 255, 255, 0.05);
-        color: var(--bb-text-sub);
-    }
-    .bb-kpi-num {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 1.8rem;
-        font-weight: 800;
-        color: #ffffff;
-        margin: 2px 0 4px 0;
-        letter-spacing: -0.03em;
-    }
-    .bb-kpi-footer {
-        font-size: 0.75rem;
-        color: var(--bb-text-sub);
-        font-weight: 500;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-    }
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(135deg, rgba(0, 245, 212, 0.15), rgba(129, 140, 248, 0.15)) !important;
+    color: var(--accent-teal) !important;
+    border: 1px solid var(--border-glow);
+    box-shadow: 0 4px 12px rgba(0, 245, 212, 0.12);
+}
 
-    /* OpenBB Section Banner */
-    .bb-section-banner {
-        background: linear-gradient(90deg, #131824 0%, #0d111a 100%);
-        border: 1px solid var(--bb-border);
-        border-left: 3px solid var(--bb-teal);
-        border-radius: 6px;
-        padding: 8px 14px;
-        margin: 1.4rem 0 0.8rem 0;
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 0.90rem;
-        font-weight: 700;
-        color: #ffffff;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
+/* KPI Widgets */
+.bb-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
 
-    /* OpenBB Proposal Pitch Box */
-    .bb-pitch-box {
-        background: var(--bb-bg-card);
-        border: 1px solid var(--bb-border);
-        border-radius: 10px;
-        padding: 1.2rem;
-        margin-bottom: 1rem;
-        transition: border-color 0.2s ease;
-    }
-    .bb-pitch-box:hover {
-        border-color: rgba(0, 245, 212, 0.3);
-    }
-    .bb-badge-gap {
-        font-family: 'JetBrains Mono', monospace;
-        background: rgba(244, 63, 94, 0.15);
-        color: #fb7185;
-        border: 1px solid rgba(244, 63, 94, 0.3);
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 0.72rem;
-        font-weight: 700;
-    }
-    .bb-badge-amber {
-        font-family: 'JetBrains Mono', monospace;
-        background: rgba(251, 191, 36, 0.15);
-        color: #fbbf24;
-        border: 1px solid rgba(251, 191, 36, 0.3);
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 0.72rem;
-        font-weight: 700;
-    }
-    .bb-badge-ok {
-        font-family: 'JetBrains Mono', monospace;
-        background: rgba(16, 185, 129, 0.15);
-        color: #34d399;
-        border: 1px solid rgba(16, 185, 129, 0.3);
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 0.72rem;
-        font-weight: 700;
-    }
+.bb-kpi-widget {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 16px 20px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
 
+.bb-kpi-widget:hover {
+    transform: translateY(-2px);
+    border-color: var(--border-glow);
+}
 
-    /* OpenBB Terminal Sidebar */
-    section[data-testid="stSidebar"] {
-        background-color: #0b0e17;
-        border-right: 1px solid var(--bb-border);
-    }
+.bb-kpi-widget-topline {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+}
 
-    /* OpenBB Tabs */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 6px;
-        border-bottom: 1px solid var(--bb-border);
-        padding-bottom: 2px;
-        margin-bottom: 1.2rem;
-    }
-    .stTabs [data-baseweb="tab"] {
-        font-family: 'JetBrains Mono', monospace;
-        background-color: transparent;
-        border-radius: 6px 6px 0 0;
-        color: var(--bb-text-muted);
-        font-weight: 600;
-        font-size: 0.88rem;
-        padding: 8px 16px;
-    }
-    .stTabs [aria-selected="true"] {
-        color: var(--bb-teal) !important;
-        background-color: rgba(0, 245, 212, 0.08) !important;
-        border-bottom: 2px solid var(--bb-teal) !important;
-    }
+.topline-teal { background: var(--accent-teal); }
+.topline-indigo { background: var(--accent-indigo); }
+.topline-amber { background: var(--accent-amber); }
+.topline-emerald { background: var(--accent-emerald); }
+.topline-rose { background: var(--accent-rose); }
 
-    /* Tables & Editor */
-    div[data-testid="stDataFrame"] {
-        border: 1px solid var(--bb-border);
-        border-radius: 8px;
-        background-color: var(--bb-bg-card);
-    }
+.bb-kpi-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
 
-    #MainMenu { visibility: hidden; }
-    footer { visibility: hidden; }
+.bb-kpi-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.bb-kpi-tag {
+    font-size: 0.72rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+}
+
+.bb-kpi-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.85rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1.2;
+    margin-bottom: 4px;
+}
+
+.bb-kpi-footer {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+/* Provenance Badge */
+.provenance-tag {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 6px;
+}
+.prov-actual { background: rgba(16, 185, 129, 0.2); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.4); }
+.prov-derived { background: rgba(129, 140, 248, 0.2); color: #818cf8; border: 1px solid rgba(129, 140, 248, 0.4); }
+.prov-estimated { background: rgba(255, 183, 3, 0.2); color: #FFB703; border: 1px solid rgba(255, 183, 3, 0.4); }
+.prov-synthetic { background: rgba(244, 63, 94, 0.2); color: #f43f5e; border: 1px solid rgba(244, 63, 94, 0.4); }
+.prov-none { background: rgba(148, 163, 184, 0.2); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.4); }
+
+/* Note banner */
+.note-banner {
+    background: rgba(244, 63, 94, 0.08);
+    border: 1px solid rgba(244, 63, 94, 0.25);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 0.85rem;
+    color: #fca5a5;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* CLI command bar */
+.cli-bar {
+    background: #030712;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--accent-teal);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.cli-prompt { color: #64748b; }
+
+.bb-section-banner {
+    background: linear-gradient(90deg, rgba(30, 58, 138, 0.3), transparent);
+    border-left: 3px solid #3b82f6;
+    padding: 8px 14px;
+    border-radius: 0 6px 6px 0;
+    margin: 16px 0 12px 0;
+    font-weight: 700;
+    font-size: 0.95rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 </style>
-""", unsafe_allow_html=True)
+"""
+
+st.markdown(TERMINAL_CSS, unsafe_allow_html=True)
 
 
 # ── Pipeline Runner ────────────────────────────────────────────────────────
@@ -386,259 +295,187 @@ def run_pipeline_for_company(
     use_llm: bool,
     force: bool,
     provider: str | None = None,
-    workers: int = 5,
+    workers: int = 4,
     log_func=None,
     prog_func=None,
 ) -> list[BenchmarkRecord]:
-    from app.stage1_list import run_stage1
-    from app.stage2_pdf_url import run_stage2
-    from app.stage3_download import run_stage3
-    from app.stage4_extract_text import run_stage4
-    from app.stage5_benchmark import run_stage5
+    """Execute scraping pipeline for a specific company."""
+    if company_id == "nomura":
+        from app.stage1_list import run_stage1
+        from app.stage2_prospectus import run_stage2
+        from app.stage3_download import run_stage3
+        from app.stage4_extract_text import run_stage4
+        from app.stage5_benchmark import run_stage5
 
-    ensure_dirs()
-    setup_logging()
+        if log_func:
+            log_func("Stage 1: Fetching Nomura fund list...")
+        funds = run_stage1(max_funds=max_funds, force=force)
 
-    company_names = {
-        "nomura": "野村アセットマネジメント",
-        "daiwa": "大和アセットマネジメント",
-        "muam": "三菱UFJアセットマネジメント",
-    }
-    company_name = company_names.get(company_id, "野村アセットマネジメント")
+        if log_func:
+            log_func(f"Stage 2: Resolving {len(funds)} prospectus URLs...")
+        funds = run_stage2(funds, force=force)
 
-    if log_func:
-        log_func(f"🚀 [INIT] {company_name} パイプライン起動 (AUM上位 {max_funds}本)")
+        if log_func:
+            log_func("Stage 3: Downloading prospectus PDFs...")
+        pdf_paths = run_stage3(funds, force=force, max_workers=workers)
 
-    # Smart Cache Sync (Instantaneous loading if pre-extracted data exists)
-    comp_json = DATA_DIR / f"{company_id}_benchmarks.json"
-    if not force and comp_json.exists():
-        raw = load_json(comp_json, [])
-        if len(raw) >= min(max_funds, 20):
-            recs = [BenchmarkRecord.model_validate(item) for item in raw[:max_funds]]
-            for r in recs:
-                r.management_company = company_name
-                if not r.theme_category:
-                    r.theme_category = classify_fund_theme(r.fund_name, r.benchmark)
-                if not r.top_distributors:
-                    dist_s, prim_s, act_s = resolve_fund_distributors(r.fund_name, company_name, r.is_etf)
-                    r.top_distributors = dist_s
-                    r.primary_broker = prim_s
-                    r.sales_pitch_action = act_s
-            if log_func:
-                log_func(f"⚡ [CACHE_HIT] {company_name}: {len(recs)} 本のマスターデータを即時同期")
-            return recs
+        if log_func:
+            log_func("Stage 4: Extracting text from PDFs...")
+        txt_paths = run_stage4(pdf_paths, force=force, max_workers=workers)
 
-    # Live Safe Pipeline Execution
-    safe_workers = min(workers, 4)
+        if log_func:
+            log_func("Stage 5: Analyzing benchmarks & distributors...")
+        records = run_stage5(funds, txt_paths, use_llm=use_llm, force=force, provider=provider, max_workers=workers)
+        return records
 
-    # Stage 1
-    if company_id == "daiwa":
-        funds = run_stage1_daiwa(force=force, max_funds=max_funds)
+    elif company_id == "daiwa":
+        from app.stage3_download import run_stage3
+        from app.stage4_extract_text import run_stage4
+        from app.stage5_benchmark import run_stage5
+
+        if log_func:
+            log_func("Stage 1: Fetching Daiwa fund list from live API...")
+        funds = run_stage1_daiwa(max_funds=max_funds, force=force)
+
+        if log_func:
+            log_func("Stage 3: Downloading Daiwa prospectus PDFs...")
+        pdf_paths = run_stage3(funds, force=force, max_workers=workers)
+
+        if log_func:
+            log_func("Stage 4: Extracting text from Daiwa PDFs...")
+        txt_paths = run_stage4(pdf_paths, force=force, max_workers=workers)
+
+        if log_func:
+            log_func("Stage 5: Analyzing benchmarks for Daiwa...")
+        records = run_stage5(funds, txt_paths, use_llm=use_llm, force=force, provider=provider, max_workers=workers)
+        return records
+
     elif company_id == "muam":
-        funds = run_stage1_muam(force=force, max_funds=max_funds)
-    else:
-        funds = run_stage1(force=force, max_funds=max_funds)
-    if log_func:
-        log_func(f"Stage 1 OK: {len(funds)} 本のファンドリスト取得")
+        from app.stage3_download import run_stage3
+        from app.stage4_extract_text import run_stage4
+        from app.stage5_benchmark import run_stage5
 
-    # Stage 2
-    if company_id not in ("daiwa", "muam"):
-        run_stage2(force=force, max_workers=safe_workers)
-    if log_func:
-        log_func("Stage 2 OK: 交付目論見書URL解決")
+        if log_func:
+            log_func("Stage 1: Fetching MUAM fund list from live API...")
+        funds = run_stage1_muam(max_funds=max_funds, force=force)
 
-    # Stage 3
-    run_stage3(force=force, max_workers=safe_workers)
-    if log_func:
-        log_func("Stage 3 OK: 目論見書PDFダウンロード")
+        if log_func:
+            log_func("Stage 3: Downloading MUAM prospectus PDFs...")
+        pdf_paths = run_stage3(funds, force=force, max_workers=workers)
 
-    # Stage 4
-    run_stage4(force=force, allow_ocr=False, max_workers=safe_workers)
-    if log_func:
-        log_func("Stage 4 OK: テキスト抽出完了")
+        if log_func:
+            log_func("Stage 4: Extracting text from MUAM PDFs...")
+        txt_paths = run_stage4(pdf_paths, force=force, max_workers=workers)
 
-    # Stage 5
-    def _stage5_cb(done: int, total_cnt: int, item_name: str) -> None:
-        if prog_func:
-            prog_func(done, total_cnt, f"{company_name}: {item_name}")
-        if (done % 5 == 0 or done == total_cnt) and log_func:
-            log_func(f"Stage 5 進捗: {done}/{total_cnt} 本 ({item_name})")
+        if log_func:
+            log_func("Stage 5: Analyzing benchmarks for MUAM...")
+        records = run_stage5(funds, txt_paths, use_llm=use_llm, force=force, provider=provider, max_workers=workers)
+        return records
 
-    records = run_stage5(
-        use_llm=use_llm,
-        provider=provider,
-        max_workers=safe_workers,
-        progress_callback=_stage5_cb,
-    )
-    for r in records:
-        r.management_company = company_name
-
-    save_json(comp_json, [r.model_dump(mode="json") for r in records])
-    if log_func:
-        log_func(f"✅ [SUCCESS] {company_name} 完了: {len(records)} 本抽出完了")
-
-    return records
+    return []
 
 
-# ── Load existing data ─────────────────────────────────────────────────────
-def load_records_for_companies(company_ids: list[str]) -> list[BenchmarkRecord]:
-    combined_records: list[BenchmarkRecord] = []
-    company_names = {
+def load_records_for_companies(selected_ids: list[str]) -> list[BenchmarkRecord]:
+    """Load cached benchmark records for selected management companies."""
+    if not BENCHMARKS_JSON.exists():
+        return []
+    try:
+        raw_list = load_json(BENCHMARKS_JSON, [])
+        all_records = [BenchmarkRecord.model_validate(r) for r in raw_list]
+    except Exception:
+        return []
+
+    name_map = {
         "nomura": "野村アセットマネジメント",
         "daiwa": "大和アセットマネジメント",
         "muam": "三菱UFJアセットマネジメント",
     }
+    selected_names = [name_map[cid] for cid in selected_ids if cid in name_map]
+    return [r for r in all_records if r.management_company in selected_names]
 
-    for cid in company_ids:
-        comp_json = DATA_DIR / f"{cid}_benchmarks.json"
-        if comp_json.exists():
-            raw = load_json(comp_json, [])
-            recs = [BenchmarkRecord.model_validate(item) for item in raw]
-            for r in recs:
-                if not r.management_company or r.management_company == "野村アセットマネジメント":
-                    r.management_company = company_names.get(cid, "野村アセットマネジメント")
-            combined_records.extend(recs)
-        elif cid == "nomura" and BENCHMARKS_JSON.exists():
-            raw = load_json(BENCHMARKS_JSON, [])
-            recs = [BenchmarkRecord.model_validate(item) for item in raw]
-            for r in recs:
-                r.management_company = "野村アセットマネジメント"
-            combined_records.extend(recs)
 
-    combined_records.sort(key=lambda x: x.aum, reverse=True)
-    for idx, r in enumerate(combined_records, start=1):
-        r.rank = idx
-
-    return combined_records
+def get_provenance_badge(prov: DataProvenance | str) -> str:
+    """Format DataProvenance as an HTML badge."""
+    val = prov.value if hasattr(prov, "value") else str(prov)
+    val_lower = val.lower()
+    if val_lower == "actual":
+        return '<span class="provenance-tag prov-actual">● 実測 (ACTUAL)</span>'
+    elif val_lower == "derived":
+        return '<span class="provenance-tag prov-derived">◆ 派生 (DERIVED)</span>'
+    elif val_lower == "estimated":
+        return '<span class="provenance-tag prov-estimated">▲ 推計 (ESTIMATED)</span>'
+    elif val_lower == "synthetic":
+        return '<span class="provenance-tag prov-synthetic">■ 合成 (SYNTHETIC)</span>'
+    else:
+        return '<span class="provenance-tag prov-none">○ 蓄積中 (NONE)</span>'
 
 
 # ── Main Application ───────────────────────────────────────────────────────
 def main() -> None:
+    ensure_dirs()
+
     # ── Header ─────────────────────────────────────────────────────────────
-    st.markdown("""<div class="openbb-header">
-<div class="openbb-logo-brand">
-<div class="openbb-icon-glyph">⚡</div>
-<div>
-<h1 class="openbb-title-h1">AM FLOW ANALYSIS</h1>
-</div>
-</div>
-<div class="openbb-header-meta">
-CORE: <span style="color: #00F5D4;">v3.4-PRO</span> ｜ ROUTE: <span style="color: #818cf8;">/am-flow/intelligence</span><br/>
-STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
-</div>
-</div>""", unsafe_allow_html=True)
+    header_col1, header_col2 = st.columns([3, 1])
+    with header_col1:
+        st.markdown("""
+        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 4px;">
+            <span style="font-size: 2rem;">⚡</span>
+            <div>
+                <h1 style="font-size: 1.75rem; font-weight: 800; margin: 0; letter-spacing: -0.02em; background: linear-gradient(135deg, #f8fafc 0%, #94a3b8 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+                    AM FLOW ANALYSIS ｜ MSCI CLIENT INTELLIGENCE
+                </h1>
+                <p style="font-size: 0.84rem; color: #94a3b8; margin: 0;">
+                    資産運用会社ベンチマーク・資金フロー解析 & 販社別マッチメーカー・商品企画提案プラットフォーム
+                </p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-
-
+    with header_col2:
+        st.markdown("""
+        <div style="text-align: right; padding-top: 8px;">
+            <span style="font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; background: rgba(0, 245, 212, 0.1); color: #00F5D4; padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(0, 245, 212, 0.3);">
+                ● LIVE SYSTEM v2.0
+            </span>
+        </div>
+        """, unsafe_allow_html=True)
 
     # ── Sidebar Configurations ─────────────────────────────────────────────
     with st.sidebar:
-        st.markdown("### ⬡ ASSET MANAGERS")
+        st.markdown("### 🏢 ASSET MANAGERS (運用会社選択)")
         company_options = {
             "nomura": "野村アセットマネジメント",
             "daiwa": "大和アセットマネジメント",
             "muam": "三菱UFJアセットマネジメント",
         }
-        selected_company_ids = st.multiselect(
-            "対象運用会社（1〜3社 一括選択）",
-            options=list(company_options.keys()),
-            default=["nomura", "daiwa", "muam"],
-            format_func=lambda x: company_options[x],
-            help="1社のみ、2社、または3社同時に選択して一括実行・統合分析できます",
-        )
+        selected_company_ids = []
+        for cid, cname in company_options.items():
+            if st.checkbox(cname, value=(cid == "nomura"), key=f"chk_{cid}"):
+                selected_company_ids.append(cid)
 
         if not selected_company_ids:
-            st.warning("⚠️ 少なくとも1社を選択してください。")
             selected_company_ids = ["nomura"]
 
-        selected_company_labels = [company_options[cid] for cid in selected_company_ids]
-
         st.divider()
-        st.markdown("### ⏱️ TIME HORIZON")
+        st.markdown("### ⏱️ HORIZON / 集計期間")
         period_choices = {
-            "1M": {"label": "直近1ヶ月 (1M)", "multiplier": 1.0, "days": 30},
-            "3M": {"label": "直近3ヶ月 (3M)", "multiplier": 3.0, "days": 90},
-            "YTD": {"label": "年初来 (YTD)", "multiplier": 4.5, "days": 135},
-            "1Y": {"label": "過去1年間 (1Y)", "multiplier": 12.0, "days": 365},
+            "1M (直近1ヶ月)": {"days": 30, "label": "直近1ヶ月 (1M)"},
+            "3M (直近3ヶ月)": {"days": 90, "label": "直近3ヶ月 (3M)"},
+            "YTD (年初来)": {"days": 135, "label": "年初来 (YTD)"},
+            "1Y (過去1年間)": {"days": 365, "label": "過去1年間 (1Y)"},
         }
-        selected_period_key = st.radio(
-            "集計期間の選択",
-            options=list(period_choices.keys()),
-            format_func=lambda k: period_choices[k]["label"],
-            index=0,
-            help="買い付け金額および運用効果の算出期間を切り替えます",
-        )
-        period_multiplier = period_choices[selected_period_key]["multiplier"]
-        period_days = period_choices[selected_period_key]["days"]
-        period_label = period_choices[selected_period_key]["label"]
+        selected_period_key = st.selectbox("集計期間を選択", list(period_choices.keys()), index=0)
+        period_info = period_choices[selected_period_key]
+        period_label = period_info["label"]
+        period_days = period_info["days"]
 
         st.divider()
-        st.markdown("### ⚙️ TERMINAL ENGINE")
+        st.markdown("### ⚙️ SCRAPER & LLM ENGINE")
+        max_funds_per_company = st.slider("ファンド取得上限 (社あたり)", min_value=5, max_value=200, value=30, step=5)
+        workers = st.slider("並列ワーカー数", min_value=1, max_value=8, value=4)
 
-        with st.expander("🔑 API Key 設定 (Gemini / Claude / OpenAI)", expanded=False):
-            st.caption("Google AI Studio で無料取得できる Gemini API Key を入力すると、AI抽出が即座に有効化されます。")
-            ui_gemini_key = st.text_input(
-                "Google Gemini API Key",
-                value=st.session_state.get("gemini_key", GEMINI_API_KEY),
-                type="password",
-                placeholder="AIzaSy...",
-                help="https://aistudio.google.com/ で無料発行可能",
-            )
-            if ui_gemini_key:
-                import os
-                import app.config as cfg
-                os.environ["GEMINI_API_KEY"] = ui_gemini_key
-                cfg.GEMINI_API_KEY = ui_gemini_key
-                st.session_state["gemini_key"] = ui_gemini_key
-
-            ui_anthropic_key = st.text_input(
-                "Anthropic Claude API Key",
-                value=st.session_state.get("anthropic_key", ANTHROPIC_API_KEY),
-                type="password",
-                placeholder="sk-ant-...",
-            )
-            if ui_anthropic_key:
-                import os
-                import app.config as cfg
-                os.environ["ANTHROPIC_API_KEY"] = ui_anthropic_key
-                cfg.ANTHROPIC_API_KEY = ui_anthropic_key
-                st.session_state["anthropic_key"] = ui_anthropic_key
-
-            st.markdown("[🔗 Google AI Studio で無料APIキーを取得](https://aistudio.google.com/app/apikey)")
-
-        prov_options = {
-            "gemini": "Google Gemini (gemini-2.0-flash / 1.5-flash)",
-            "anthropic": "Anthropic Claude (claude-3-5-sonnet)",
-            "openai": "OpenAI (gpt-4o-mini)",
-            "ollama": "Ollama (Local LLM / llama3.2)",
-            "auto": "AUTO (自動選択)",
-        }
-
-        selected_provider_key = st.selectbox(
-            "🤖 LLM EXTRACTOR",
-            options=list(prov_options.keys()),
-            format_func=lambda x: prov_options[x],
-            index=0,
-            help="ベンチマーク抽出に使用するAIモデルを選択",
-        )
-        provider_arg = None if selected_provider_key == "auto" else selected_provider_key
-
-        max_funds_per_company = st.slider(
-            "Top N Funds per Manager",
-            min_value=5,
-            max_value=200,
-            value=50,
-            step=5,
-        )
-
-        workers = st.slider(
-            "Concurrent Workers",
-            min_value=1,
-            max_value=10,
-            value=5,
-            help="ネットワーク並行処理ワーカ数",
-        )
-
+        available_providers = get_available_providers()
+        provider_arg = st.selectbox("AI Model Provider", available_providers, index=0 if available_providers else None)
         use_llm = st.toggle("LLM Inference Engine", value=True)
         force = st.toggle("Force Re-Scrape (Bypass Cache)", value=False)
 
@@ -655,8 +492,6 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
         st.divider()
         button_label = f"🚀 RUN PIPELINE ({len(selected_company_ids)} MANAGERS)"
         run_clicked = st.button(button_label, type="primary", use_container_width=True)
-
-
 
     # ── Run pipeline trigger ───────────────────────────────────────────────
     if run_clicked:
@@ -705,29 +540,46 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
             st.session_state["cached_records"] = records
 
     if not records:
-        st.info("💡 サイドバーの「RUN PIPELINE」ボタンをクリックしてデータを取得してください。")
+        st.info("💡 サイドバーの「🚀 RUN PIPELINE」ボタンをクリックしてデータを取得してください。")
         return
 
-    # ── CLI Command Bar ────────────────────────────────────────────────────
+    # ── CLI Command Bar & Download ─────────────────────────────────────────
     active_managers_str = " ".join([f"--{cid}" for cid in selected_company_ids])
-    st.markdown(f"""
-    <div class="cli-bar">
-        <span class="cli-prompt">> /am-flow/funds/intelligence</span>
-        <span style="color: #00F5D4;">--period={selected_period_key}</span>
-        <span style="color: #818cf8;">{active_managers_str}</span>
-        <span style="color: #94a3b8;">--total-funds={len(records)}</span>
+    cli_col1, cli_col2 = st.columns([3, 1])
+    with cli_col1:
+        st.markdown(f"""
+        <div class="cli-bar">
+            <span class="cli-prompt">> /am-flow/funds/intelligence</span>
+            <span style="color: #00F5D4;">--period={selected_period_key}</span>
+            <span style="color: #818cf8;">{active_managers_str}</span>
+            <span style="color: #94a3b8;">--total-funds={len(records)}</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with cli_col2:
+        # Generate styled Excel in memory for download
+        excel_buffer = io.BytesIO()
+        temp_excel_path = OUTPUT_DIR / f"temp_report_{int(time.time())}.xlsx"
+        create_styled_excel(records, temp_excel_path)
+        if temp_excel_path.exists():
+            with open(temp_excel_path, "rb") as f:
+                excel_bytes = f.read()
+            temp_excel_path.unlink(missing_ok=True)
+            st.download_button(
+                label="📥 EXCEL レポート (7シート) 出力",
+                data=excel_bytes,
+                file_name=f"AM_Flow_Intelligence_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+
+    # ── Phase 0 Note Banner ────────────────────────────────────────────────
+    st.markdown("""
+    <div class="note-banner">
+        <span>⚠️</span>
+        <span><b>注記:</b> 買い付け金額・販売会社情報は、時系列データ蓄積および目論見書テキスト解析に基づき順次実測化されます。日次時系列が蓄積途中のファンドは「データ蓄積中」と明示されます。</span>
     </div>
     """, unsafe_allow_html=True)
-
-
-    # ── Top Level Tabs ─────────────────────────────────────────────────────
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        f"📈 MARKET OVERVIEW ({period_label})",
-        "🏛️ DISTRIBUTOR RANKINGS",
-        "📋 ALL FUNDS MATRIX",
-        "💡 PROPOSAL MATCHMAKER",
-        "🔍 DAILY FLOW & PROSPECTUS",
-    ])
 
     # ── Calculate Metrics for Selected Period ─────────────────────────────
     total_aum = sum(r.aum for r in records)
@@ -735,11 +587,34 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
     msci_records = [r for r in records if r.is_msci]
     msci_aum = sum(r.aum for r in msci_records)
     msci_count = len(msci_records)
-    total_inflow = sum(r.estimated_net_inflow * period_multiplier for r in records)
-    non_msci_inflow = sum(r.estimated_net_inflow * period_multiplier for r in records if not r.is_msci)
 
+    # Compute period flow for all records from timeseries store
+    record_flows: dict[str, float | None] = {}
+    for r in records:
+        s = load_series(r.fund_code, days=period_days)
+        if len(s) >= 2:
+            _, _, flow = calculate_daily_net_flows(s)
+            record_flows[r.fund_code] = flow
+        else:
+            record_flows[r.fund_code] = None
+
+    valid_flows = [f for f in record_flows.values() if f is not None]
+    total_inflow = sum(valid_flows) if valid_flows else None
+    non_msci_valid = [record_flows[r.fund_code] for r in records if not r.is_msci and record_flows[r.fund_code] is not None]
+    non_msci_inflow = sum(non_msci_valid) if non_msci_valid else None
     msci_aum_share = (msci_aum / total_aum * 100) if total_aum else 0
     msci_count_share = (msci_count / total_count * 100) if total_count else 0
+    needs_review_count = sum(1 for r in records if r.needs_review)
+
+    # ── Top Level Tabs ─────────────────────────────────────────────────────
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        f"📈 MARKET OVERVIEW ({period_label})",
+        "🏛️ DISTRIBUTOR RANKINGS",
+        "📋 ALL FUNDS MATRIX",
+        "💡 PROPOSAL MATCHMAKER",
+        "🔍 DAILY FLOW & PROSPECTUS",
+        f"⚠️ NEEDS REVIEW ({needs_review_count})",
+    ])
 
     # ═══════════════════════════════════════════════════════════════════════
     # TAB 1: ANALYTICS & MARKET SHARE
@@ -759,38 +634,29 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
             <div class="bb-kpi-widget">
                 <div class="bb-kpi-widget-topline topline-teal"></div>
                 <div class="bb-kpi-header">
-                    <span class="bb-kpi-label">MSCI ADOPTED AUM</span>
-                    <span class="bb-kpi-tag">{msci_count} FUNDS</span>
+                    <span class="bb-kpi-label">MSCI ADOPTION</span>
+                    <span class="bb-kpi-tag">{msci_count} 本</span>
                 </div>
-                <div class="bb-kpi-num" style="color: #00F5D4;">{msci_aum / 1e12:.2f} <span style="font-size: 1.1rem;">兆円</span></div>
-                <div class="bb-kpi-footer" style="color: #00F5D4;">SHARE: {msci_aum_share:.1f}%</div>
-            </div>
-            <div class="bb-kpi-widget">
-                <div class="bb-kpi-widget-topline topline-emerald"></div>
-                <div class="bb-kpi-header">
-                    <span class="bb-kpi-label">TOTAL NET FLOW ({selected_period_key})</span>
-                    <span class="bb-kpi-tag">BUY VOLUME</span>
-                </div>
-                <div class="bb-kpi-num" style="color: {'#34d399' if total_inflow >= 0 else '#f43f5e'};">{format_inflow_oku(total_inflow)}</div>
-                <div class="bb-kpi-footer">{period_label} 累計</div>
+                <div class="bb-kpi-num">{msci_aum_share:.1f}%</div>
+                <div class="bb-kpi-footer">MSCI AUM: {msci_aum / 1e12:.2f} 兆円</div>
             </div>
             <div class="bb-kpi-widget">
                 <div class="bb-kpi-widget-topline topline-amber"></div>
                 <div class="bb-kpi-header">
-                    <span class="bb-kpi-label">NON-MSCI TARGET FLOW</span>
-                    <span class="bb-kpi-tag">OPPORTUNITY</span>
+                    <span class="bb-kpi-label">NET INFLOW ({period_label})</span>
+                    <span class="bb-kpi-tag">FLOW</span>
                 </div>
-                <div class="bb-kpi-num" style="color: #FBBF24;">{format_inflow_oku(non_msci_inflow)}</div>
-                <div class="bb-kpi-footer" style="color: #FBBF24;">リプレイス余地</div>
+                <div class="bb-kpi-num" style="font-size: 1.5rem;">{format_inflow_oku(total_inflow)}</div>
+                <div class="bb-kpi-footer">非MSCI買い付け: {format_inflow_oku(non_msci_inflow)}</div>
             </div>
             <div class="bb-kpi-widget">
-                <div class="bb-kpi-widget-topline topline-slate"></div>
+                <div class="bb-kpi-widget-topline topline-rose"></div>
                 <div class="bb-kpi-header">
-                    <span class="bb-kpi-label">REVIEW QUEUE</span>
-                    <span class="bb-kpi-tag">HUMAN-IN-LOOP</span>
+                    <span class="bb-kpi-label">SALES TARGETS</span>
+                    <span class="bb-kpi-tag">OPPORTUNITY</span>
                 </div>
-                <div class="bb-kpi-num" style="color: #cbd5e1;">{sum(1 for r in records if r.needs_review)}</div>
-                <div class="bb-kpi-footer">要レビュー件数</div>
+                <div class="bb-kpi-num">{len(records) - msci_count}</div>
+                <div class="bb-kpi-footer">要確認: {needs_review_count} 本</div>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -799,21 +665,24 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
 
         with col_a1:
             st.markdown(f"#### ⚡ TOP 10 NET FLOW LEADERS ({period_label})")
-            sorted_by_flow = sorted(records, key=lambda x: x.estimated_net_inflow * period_multiplier, reverse=True)[:10]
-            flow_df = pd.DataFrame([
-                {
-                    "ファンド名": f"[{r.management_company[:2]}] {r.fund_name[:18]}...",
-                    "買い付け金額 (億円)": round((r.estimated_net_inflow * period_multiplier) / 1e8, 1),
-                    "MSCI": "MSCI" if r.is_msci else "他社",
-                }
-                for r in sorted_by_flow
-            ])
-            st.bar_chart(
-                flow_df.set_index("ファンド名")["買い付け金額 (億円)"],
-                color="#00F5D4",
-                x_label="ファンド",
-                y_label=f"買い付け金額 (億円) - {period_label}",
-            )
+            if valid_flows:
+                sorted_by_flow = sorted(records, key=lambda x: record_flows.get(x.fund_code) or 0.0, reverse=True)[:10]
+                flow_df = pd.DataFrame([
+                    {
+                        "ファンド名": f"[{r.management_company[:2]}] {r.fund_name[:18]}...",
+                        "買い付け金額 (億円)": round((record_flows.get(r.fund_code) or 0.0) / 1e8, 1),
+                        "MSCI": "MSCI" if r.is_msci else "他社",
+                    }
+                    for r in sorted_by_flow
+                ])
+                st.bar_chart(
+                    flow_df.set_index("ファンド名")["買い付け金額 (億円)"],
+                    color="#00F5D4",
+                    x_label="ファンド",
+                    y_label=f"買い付け金額 (億円) - {period_label}",
+                )
+            else:
+                st.info("ℹ️ 時系列データ蓄積中のため、ランキングは日次データ蓄積後に自動表示されます。")
 
         with col_a2:
             st.markdown(f"#### 🏷️ THEME BREAKDOWN & INFLOW VELOCITY ({period_label})")
@@ -821,20 +690,25 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
             for r in records:
                 t = r.theme_category or "全世界・先進国株式"
                 if t not in theme_agg:
-                    theme_agg[t] = {"theme": t, "aum_oku": 0.0, "inflow_oku": 0.0, "count": 0}
+                    theme_agg[t] = {"theme": t, "aum_oku": 0.0, "inflow_oku": 0.0, "count": 0, "has_inflow": False}
                 theme_agg[t]["aum_oku"] += r.aum / 1e8
-                theme_agg[t]["inflow_oku"] += (r.estimated_net_inflow * period_multiplier) / 1e8
+                flow_val = record_flows.get(r.fund_code)
+                if flow_val is not None:
+                    theme_agg[t]["inflow_oku"] += flow_val / 1e8
+                    theme_agg[t]["has_inflow"] = True
                 theme_agg[t]["count"] += 1
 
-            theme_df = pd.DataFrame(list(theme_agg.values()))
-            theme_df.sort_values(by="inflow_oku", ascending=False, inplace=True)
+            theme_rows = []
+            for t_data in theme_agg.values():
+                theme_rows.append({
+                    "テーマ分類": t_data["theme"],
+                    "本数": t_data["count"],
+                    "AUM合計(億円)": round(t_data["aum_oku"], 1),
+                    f"買い付け金額合計 ({selected_period_key})": f"{t_data['inflow_oku']:,.1f}億円" if t_data["has_inflow"] else "データ蓄積中",
+                })
+            theme_df = pd.DataFrame(theme_rows)
             st.dataframe(
-                theme_df.rename(columns={
-                    "theme": "テーマ分類",
-                    "count": "本数",
-                    "aum_oku": "AUM合計(億円)",
-                    "inflow_oku": f"買い付け金額合計(億円 / {selected_period_key})",
-                }),
+                theme_df,
                 use_container_width=True,
                 hide_index=True,
             )
@@ -842,7 +716,7 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
         st.divider()
         st.markdown(f"#### 🎯 PRIME SALES TARGETS (Non-MSCI with High Inflow ｜ {period_label})")
         non_msci = [r for r in records if not r.is_msci and r.aum > 0]
-        non_msci.sort(key=lambda x: (x.estimated_net_inflow * period_multiplier, x.aum), reverse=True)
+        non_msci.sort(key=lambda x: (record_flows.get(x.fund_code) or 0.0, x.aum), reverse=True)
 
         targets_data = []
         for t in non_msci[:12]:
@@ -851,7 +725,7 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
                 "運用会社": t.management_company,
                 "ファンド名": t.fund_name,
                 "AUM (億円)": round(t.aum / 1e8, 0),
-                f"買い付け金額 ({selected_period_key})": format_inflow_oku(t.estimated_net_inflow * period_multiplier),
+                f"買い付け金額 ({selected_period_key})": format_inflow_oku(record_flows.get(t.fund_code)),
                 "テーマ": t.theme_category,
                 "現ベンチマーク": t.benchmark or "—",
                 "主要販売会社 (Broker)": t.top_distributors or t.primary_broker or "主要証券",
@@ -869,8 +743,7 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
     # ═══════════════════════════════════════════════════════════════════════
     with tab2:
         st.markdown("### 🏛️ 販売会社別 取扱商品ランキング")
-        st.caption(f"各販売会社が主力として販売しているファンドと残高・買い付け金額一覧（集計期間: {period_label}）")
-
+        st.caption(f"各販売会社が主力として販売しているファンドと残高一覧（二重計上防止済・集計期間: {period_label}）")
 
         col_b1, col_b2 = st.columns([1, 2])
         dist_filter = col_b1.selectbox(
@@ -899,7 +772,7 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
                     "運用商品名 (ファンド名)": f["fund_name"],
                     "運用会社": f["management_company"],
                     "残高 (億円)": f["aum_oku"],
-                    f"買い付け金額 ({selected_period_key})": format_inflow_oku(f["inflow_oku"] * period_multiplier * 1e8),
+                    f"買い付け金額 ({selected_period_key})": format_inflow_oku(record_flows.get(f.get("fund_code", ""))),
                     "ベンチマーク指数": f["benchmark"],
                     "MSCI採用": "🟢 MSCI" if f["is_msci"] else "⚪ 他社",
                     "営業アプローチ戦略": f["action"],
@@ -914,208 +787,117 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
             )
 
     # ═══════════════════════════════════════════════════════════════════════
-    # TAB 3: ALL FUNDS LIST & INTERACTIVE REVIEW
+    # TAB 3: ALL FUNDS MATRIX & EDIT
     # ═══════════════════════════════════════════════════════════════════════
     with tab3:
-        col_f1, col_f2, col_f3, col_f4 = st.columns([2, 1, 1, 2])
-        search_query = col_f1.text_input("🔍 QUERY FILTER", placeholder="ファンド名・コード・ベンチマーク・販社...")
-        theme_filter = col_f2.selectbox("THEME", options=["全て"] + THEMES)
-        review_filter = col_f3.selectbox(
-            "FILTER STATUS",
-            options=["全て", "買い付け金額プラスのみ", "非MSCIのみ", "要確認のみ", "手動編集のみ"],
-        )
+        st.markdown("### 📋 全ファンド一覧・解析マトリクス")
+        st.caption("全ファンドの残高・買い付け金額・ベンチマーク・テーマ・販売会社およびデータ来歴ステータス")
 
-        with col_f4:
-            st.write("📥 EXPORT TERMINAL REPORT (5-SHEET)")
-            col_d1, col_d2 = st.columns(2)
-            xlsx_path = OUTPUT_DIR / "nomura_benchmarks.xlsx"
-            csv_path = OUTPUT_DIR / "nomura_benchmarks.csv"
+        col_f1, col_f2, col_f3, col_f4 = st.columns([1, 1, 1, 1])
+        company_filter = col_f1.selectbox("運用会社", ["すべて"] + list(company_options.values()))
+        msci_filter = col_f2.selectbox("MSCI採用", ["すべて", "MSCIのみ", "非MSCIのみ"])
+        theme_filter = col_f3.selectbox("テーマ分類", ["すべて"] + THEMES)
+        search_query = col_f4.text_input("🔍 ファンド名 / コード検索", "")
 
-            if xlsx_path.exists():
-                with open(xlsx_path, "rb") as f:
-                    col_d1.download_button(
-                        "📊 Excel (.xlsx)",
-                        f.read(),
-                        file_name="am_flow_analysis_intelligence.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
-            if csv_path.exists():
-                with open(csv_path, "rb") as f:
-                    col_d2.download_button(
-                        "📄 CSV (.csv)",
-                        f.read(),
-                        file_name="am_flow_analysis_benchmarks.csv",
-                        mime="text/csv",
-                    )
-
-
-        # Filter records
         filtered_records = records
-        if search_query:
-            q = search_query.lower()
-            filtered_records = [
-                r for r in filtered_records
-                if q in r.fund_name.lower() or q in r.fund_code.lower() or q in (r.benchmark or "").lower() or q in (r.top_distributors or "").lower() or q in (r.management_company or "").lower()
-            ]
-        if theme_filter != "全て":
-            filtered_records = [r for r in filtered_records if r.theme_category == theme_filter]
-        if review_filter == "買い付け金額プラスのみ":
-            filtered_records = [r for r in filtered_records if r.estimated_net_inflow > 0]
-        elif review_filter == "非MSCIのみ":
+        if company_filter != "すべて":
+            filtered_records = [r for r in filtered_records if r.management_company == company_filter]
+        if msci_filter == "MSCIのみ":
+            filtered_records = [r for r in filtered_records if r.is_msci]
+        elif msci_filter == "非MSCIのみ":
             filtered_records = [r for r in filtered_records if not r.is_msci]
-        elif review_filter == "要確認のみ":
-            filtered_records = [r for r in filtered_records if r.needs_review]
-        elif review_filter == "手動編集のみ":
-            filtered_records = [r for r in filtered_records if r.manual_override]
+        if theme_filter != "すべて":
+            filtered_records = [r for r in filtered_records if r.theme_category == theme_filter]
+        if search_query:
+            filtered_records = [r for r in filtered_records if search_query.lower() in r.fund_name.lower() or search_query.lower() in r.fund_code.lower()]
 
-        edit_rows = []
+        table_rows = []
         for r in filtered_records:
-            edit_rows.append({
+            table_rows.append({
                 "順位": r.rank,
                 "運用会社": r.management_company,
                 "ファンド名": r.fund_name,
                 "コード": r.fund_code,
-                "AUM (億円)": round(r.aum / 1e8, 0) if r.aum else 0,
-                f"買い付け金額 ({selected_period_key})": format_inflow_oku(r.estimated_net_inflow * period_multiplier),
-                "テーマ分類": r.theme_category or "全世界・先進国株式",
-                "ベンチマーク指数": r.benchmark or "",
-                "指数提供者": r.index_provider or "なし",
-                "MSCI": "🟢 MSCI" if r.is_msci else "⚪ 他社",
-                "主要販売会社 (Broker)": r.top_distributors or r.primary_broker or "主要証券",
-                "営業アクション": r.sales_pitch_action or "",
-                "要確認": r.needs_review,
-                "レビューメモ": r.review_comment or "",
-                "手動": "✏️" if r.manual_override else "",
+                "純資産 (億円)": round(r.aum / 1e8, 1),
+                f"買い付け金額 ({selected_period_key})": format_inflow_oku(record_flows.get(r.fund_code)),
+                "運用効果(億円)": round((r.performance_effect or 0.0) / 1e8, 1),
+                "テーマ": r.theme_category,
+                "ベンチマーク": r.benchmark or "—",
+                "指数提供者": r.index_provider,
+                "MSCI": "🟢 はい" if r.is_msci else "いいえ",
+                "主要販売会社": r.top_distributors or r.primary_broker or "主要証券",
+                "販社来歴": r.distributor_provenance.value if hasattr(r.distributor_provenance, "value") else str(r.distributor_provenance),
+                "営業ターゲット判定": r.sales_pitch_action or "—",
+                "信頼度": r.confidence.value if hasattr(r.confidence, "value") else str(r.confidence),
+                "要確認": "⚠️" if r.needs_review else "✅",
             })
 
-        table_df = pd.DataFrame(edit_rows)
-
-        st.caption(f"MATCHED: {len(table_df)} FUNDS (ダブルクリックで直接編集可能)")
-        edited_df = st.data_editor(
-            table_df,
+        st.dataframe(
+            pd.DataFrame(table_rows),
             use_container_width=True,
             hide_index=True,
-            height=500,
-            disabled=["順位", "運用会社", "ファンド名", "コード", "AUM (億円)", f"買い付け金額 ({selected_period_key})", "MSCI", "手動"],
+            height=450,
         )
 
-        if st.button("💾 SAVE CHANGES & RE-GENERATE REPORTS", type="primary"):
-            updated_count = 0
-            for _, row in edited_df.iterrows():
-                code = row["コード"]
-                bm = row["ベンチマーク指数"]
-                prov = row["指数提供者"]
-                theme = row["テーマ分類"]
-                dist = row["主要販売会社 (Broker)"]
-                action = row["営業アクション"]
-                needs_rev = bool(row["要確認"])
-                comm = str(row["レビューメモ"])
-
-                orig = next((r for r in records if r.fund_code == code), None)
-                if orig and (orig.benchmark != bm or orig.index_provider != prov or orig.theme_category != theme or orig.top_distributors != dist or orig.sales_pitch_action != action or orig.needs_review != needs_rev or orig.review_comment != comm):
-                    orig.benchmark = bm
-                    orig.index_provider = prov
-                    orig.theme_category = theme
-                    orig.top_distributors = dist
-                    orig.sales_pitch_action = action
-                    orig.needs_review = needs_rev
-                    orig.review_comment = comm
-                    orig.manual_override = True
-                    orig.is_msci = "MSCI" in (bm or "").upper() or "MSCI" in (prov or "").upper()
-
-                    ft = orig.fund_type.value if hasattr(orig.fund_type, "value") else str(orig.fund_type or "インデックス型")
-                    update_manual_override(
-                        fund_code=code,
-                        benchmark=bm,
-                        index_provider=prov,
-                        fund_type=ft,
-                        needs_review=needs_rev,
-                        comment=comm,
-                        reviewer="Streamlit Analyst",
-                    )
-                    updated_count += 1
-
-            if updated_count > 0:
-                run_stage6(records)
-                st.success(f"✅ {updated_count} 件の変更を保存し、Excelレポートを更新しました!")
-                st.session_state["cached_records"] = records
-                st.rerun()
-            else:
-                st.info("変更はありませんでした。")
-
     # ═══════════════════════════════════════════════════════════════════════
-    # TAB 4: PRODUCT PROPOSALS & BROKER MATCHMAKER
+    # TAB 4: PROPOSAL MATCHMAKER
     # ═══════════════════════════════════════════════════════════════════════
     with tab4:
-        st.markdown("### 💡 運用会社向け 商品企画提案 & 販社マッチング")
-        st.caption("運用会社の商品企画部へ「**今どのテーマに買い付け資金が集まっており、どの販売会社と組めば最も売れるか**」を提案するためのコンサルティングインテリジェンスです。")
+        st.markdown("### 💡 商品企画提案 & 販社マッチメーカー")
+        st.caption("運用会社の商品ラインアップの欠落（ギャップ）と各販売会社で最も売れるテーマをマッチングしたコンサルティング提案")
 
         company_for_pitch = st.selectbox(
-            "TARGET ASSET MANAGER",
-            options=selected_company_labels,
+            "提案対象の運用会社を選択",
+            options=list(company_options.values()),
+            index=0,
         )
 
-        firm_records = [r for r in records if r.management_company == company_for_pitch] or records
-        proposals = generate_product_proposals(firm_records, company_for_pitch)
+        records_for_pitch = [r for r in records if r.management_company == company_for_pitch]
+        if not records_for_pitch:
+            records_for_pitch = records
 
-        col_p1, col_p2 = st.columns([1, 1])
+        proposals = generate_product_proposals(records_for_pitch, company_for_pitch)
 
-        with col_p1:
-            st.markdown(f"#### 🧩 {company_for_pitch} LINEUP GAP ANALYSIS")
-            for prop in proposals:
-                st_type = prop.get("status_type", "gap")
-                if st_type == "gap":
-                    badge_class = "bb-badge-gap"
-                elif st_type == "non_msci":
-                    badge_class = "bb-badge-amber"
-                else:
-                    badge_class = "bb-badge-ok"
-
+        st.markdown("#### 🎯 商品ラインアップ・ギャップ分析 & 組成推奨カード")
+        prop_cols = st.columns(min(len(proposals), 3) if proposals else 1)
+        for idx, prop in enumerate(proposals[:3]):
+            with prop_cols[idx % len(prop_cols)]:
+                p_border = "#f43f5e" if "最優先" in prop["priority"] else "#00F5D4"
                 st.markdown(f"""
-                <div class="bb-pitch-box">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                        <span style="font-size: 1.15rem; font-weight: 700; color: #ffffff;">{prop['theme']}</span>
-                        <span class="{badge_class}">{prop['status']}</span>
+                <div style="background: #0f131c; border: 1px solid {p_border}; border-radius: 12px; padding: 18px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                        <span style="font-size: 0.75rem; font-weight: 700; color: {p_border};">{prop['priority']}</span>
+                        <span style="font-size: 0.72rem; color: #94a3b8;">{prop['status']}</span>
                     </div>
-                    <div style="font-size: 0.84rem; color: #94a3b8; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace;">
-                        自社現保有: <b style="color: #f1f5f9;">{prop['existing_funds_count']} 本</b> (うちMSCI採用: <b style="color: {'#34d399' if prop['msci_funds_count'] > 0 else '#fb7185'};">{prop['msci_funds_count']} 本</b>) ｜ AUM: <b style="color: #f1f5f9;">{prop['theme_aum_display']}</b> ｜ 買い付け金額: <b style="color: #00F5D4;">{prop['theme_inflow_display']}</b>
+                    <h4 style="margin: 0 0 8px 0; font-size: 1.1rem; color: #f8fafc;">{prop['theme']}</h4>
+                    <p style="font-size: 0.82rem; color: #cbd5e1; margin-bottom: 12px;">{prop['rational']}</p>
+                    <div style="background: rgba(255,255,255,0.04); padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 8px;">
+                        <b>推奨指数:</b> <code style="color: #00F5D4;">{prop['recommended_msci_index']}</code>
                     </div>
-                    <div style="background: #0d111a; border: 1px solid var(--bb-border); padding: 10px 14px; border-radius: 6px; font-size: 0.85rem; margin-top: 8px;">
-                        <div style="margin-bottom: 4px;"><b style="color: #00F5D4;">推奨MSCI指数:</b> <span style="color: #e2e8f0; font-family: 'JetBrains Mono', monospace;">{prop['recommended_msci_index']}</span></div>
-                        <div style="margin-bottom: 6px;"><b style="color: #FBBF24;">最適主幹販社:</b> <span style="color: #fde68a;">{prop['best_selling_brokers']}</span></div>
-                        <div style="color: #cbd5e1; font-size: 0.82rem; line-height: 1.5;">{prop['proposal_narrative']}</div>
+                    <div style="font-size: 0.78rem; color: #94a3b8;">
+                        <b>最適主幹販社:</b> {prop['best_selling_brokers']}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
 
-
-        with col_p2:
-            st.markdown("#### 🏢 販社 × テーマ別 売れ行きマトリクス")
-            st.caption("どの販売会社経由だと、どのテーマが最も売れているかを可視化")
-
-            matrix_rows = build_broker_theme_sales_matrix(records)
-            matrix_df = pd.DataFrame([
-                {
-                    "販売会社 (Broker)": m["broker"],
-                    "得意テーマ": m["theme"],
-                    "取扱本数": m["fund_count"],
-                    "AUM合計 (億円)": round(m["total_aum"] / 1e8, 1),
-                    f"買い付け金額 ({selected_period_key})": format_inflow_oku(m["total_inflow"] * period_multiplier),
-                }
-                for m in matrix_rows[:12]
-            ])
-            st.dataframe(
-                matrix_df,
-                use_container_width=True,
-                hide_index=True,
-            )
-
-            st.markdown(f"""
-            <div style="background: rgba(0, 245, 212, 0.06); border-left: 3px solid #00F5D4; padding: 12px 16px; border-radius: 0 6px 6px 0; margin-top: 1rem; font-size: 0.86rem; color: #bae6fd;">
-                <b style="color: #00F5D4;">💡 提案トークの活用例（対 {company_for_pitch}）:</b><br/>
-                <i>「御社のラインアップにはAI・半導体分野が不足しています。市場ではこのテーマに期間中大きな買い付けが発生しており、特に<b>SBI証券・楽天証券</b>での売れ行きが突出しています。ぜひ<b>MSCI AI & Robotics指数</b>を採用し、ネット証券を主幹販社とした新商品を企画しませんか？」</i>
-            </div>
-            """, unsafe_allow_html=True)
+        st.divider()
+        st.markdown("#### 📊 販売会社 × テーマ別 売れ行きマトリクス")
+        matrix_rows = build_broker_theme_sales_matrix(records)
+        matrix_df = pd.DataFrame([
+            {
+                "販売会社 (Broker)": m["broker"],
+                "得意テーマ": m["theme"],
+                "取扱本数": m["fund_count"],
+                "AUM合計 (億円)": round(m["total_aum"] / 1e8, 1),
+                f"買い付け金額 ({selected_period_key})": "データ蓄積中",
+            }
+            for m in matrix_rows[:12]
+        ])
+        st.dataframe(
+            matrix_df,
+            use_container_width=True,
+            hide_index=True,
+        )
 
     # ═══════════════════════════════════════════════════════════════════════
     # TAB 5: DAILY FLOW INSPECTOR & PROSPECTUS
@@ -1124,7 +906,7 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
         st.markdown("### 🔍 ファンド別・日次買い付け推移 & 目論見書インスペクター")
         st.caption(f"1営業日ごとの資金流入（日次買い付け金額）および累積フローの推移グラフ（集計期間: {period_label}）")
 
-        fund_options = {r.fund_code: f"#{r.rank} [{r.management_company[:2]}] {r.fund_name} ({format_aum_oku(r.aum)} / 買付 {format_inflow_oku(r.estimated_net_inflow * period_multiplier)})" for r in records}
+        fund_options = {r.fund_code: f"#{r.rank} [{r.management_company[:2]}] {r.fund_name} ({format_aum_oku(r.aum)} / 買付 {format_inflow_oku(record_flows.get(r.fund_code))})" for r in records}
         selected_code = st.selectbox(
             "SELECT FUND FOR DRILLDOWN",
             options=list(fund_options.keys()),
@@ -1139,10 +921,13 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
             with col_i1:
                 st.markdown(f"### {selected_record.fund_name}")
                 st.write(f"**運用会社**: `{selected_record.management_company}` ｜ **テーマ**: `{selected_record.theme_category}`")
-                st.write(f"**純資産(AUM)**: {format_aum_oku(selected_record.aum)} ｜ **期間買い付け金額 ({selected_period_key})**: `{format_inflow_oku(selected_record.estimated_net_inflow * period_multiplier)}`")
+                st.write(f"**純資産(AUM)**: {format_aum_oku(selected_record.aum)} ｜ **期間買い付け金額 ({selected_period_key})**: `{format_inflow_oku(record_flows.get(selected_record.fund_code))}`")
                 st.write(f"**現在のベンチマーク**: `{selected_record.benchmark or 'なし'}` ({selected_record.index_provider})")
                 st.write(f"**MSCI採用**: {'🟢 はい' if selected_record.is_msci else 'いいえ'}")
                 st.write(f"**主要販売会社**: `{selected_record.top_distributors or '主要証券'}`")
+                
+                prov_badge_html = get_provenance_badge(selected_record.distributor_provenance)
+                st.markdown(f"**販社データ来歴**: {prov_badge_html}", unsafe_allow_html=True)
                 st.write(f"**営業アクション**: `{selected_record.sales_pitch_action or '—'}`")
 
                 if selected_record.prospectus_pdf_url:
@@ -1188,49 +973,108 @@ STATUS: <span style="color: #10B981; font-weight: 700;">● ONLINE ACTIVE</span>
             st.divider()
             st.markdown(f"#### 📈 {selected_record.fund_name} の日次買い付け金額 & 累積推移 ({period_label})")
 
-            daily_data = generate_daily_flow_timeseries(
-                fund_name=selected_record.fund_name,
-                aum=selected_record.aum,
-                monthly_inflow=selected_record.estimated_net_inflow,
-                nav=selected_record.nav or 20000.0,
-                days=period_days,
-            )
-            daily_df = pd.DataFrame(daily_data)
+            series = load_series(selected_record.fund_code, days=period_days)
+            if len(series) < 2:
+                st.info(f"ℹ️ 日次データ蓄積中（現在{len(series)}営業日分）\n日次スナップショットが2営業日以上蓄積されると、買い付け金額と運用効果の分解グラフ・明細表が表示されます。")
+            else:
+                ledger_rows = []
+                cum_flow = 0.0
+                for s_i in range(1, len(series)):
+                    prev_s = series[s_i - 1]
+                    curr_s = series[s_i]
+                    p_nav = float(prev_s.get("nav") or 0.0)
+                    c_nav = float(curr_s.get("nav") or 0.0)
+                    p_aum = float(prev_s.get("aum") or 0.0)
+                    c_aum = float(curr_s.get("aum") or 0.0)
+                    dist = float(curr_s.get("distribution") or 0.0)
 
-            col_g1, col_g2 = st.columns([1, 1])
+                    if p_nav > 0 and p_aum > 0:
+                        ret = (c_nav + dist - p_nav) / p_nav
+                        perf = p_aum * ret
+                        flow = (c_aum - p_aum) - perf
+                        cum_flow += flow
+                        ledger_rows.append({
+                            "date": curr_s.get("date"),
+                            "nav": c_nav,
+                            "aum_oku": round(c_aum / 1e8, 1),
+                            "daily_return_pct": round(ret * 100, 2),
+                            "daily_perf_oku": round(perf / 1e8, 2),
+                            "daily_inflow_oku": round(flow / 1e8, 2),
+                            "cumulative_inflow_oku": round(cum_flow / 1e8, 1),
+                        })
 
-            with col_g1:
-                st.markdown("##### 📊 DAILY NET INFLOW VELOCITY (日次フロー)")
-                st.bar_chart(
-                    daily_df.set_index("date")["daily_inflow_oku"],
-                    color="#00F5D4",
-                    x_label="日付",
-                    y_label="日次買い付け金額 (億円)",
-                )
+                if ledger_rows:
+                    daily_df = pd.DataFrame(ledger_rows)
 
-            with col_g2:
-                st.markdown("##### 📈 CUMULATIVE FLOW & NAV TRAJECTORY")
-                st.line_chart(
-                    daily_df.set_index("date")[["cumulative_inflow_oku", "aum_oku"]],
-                    color=["#00F5D4", "#818cf8"],
-                    x_label="日付",
-                    y_label="金額 (億円)",
-                )
+                    col_g1, col_g2 = st.columns([1, 1])
 
-            st.markdown("##### 📋 DAILY TRANSACTION LEDGER")
+                    with col_g1:
+                        st.markdown("##### 📊 DAILY NET INFLOW VELOCITY (日次フロー)")
+                        st.bar_chart(
+                            daily_df.set_index("date")["daily_inflow_oku"],
+                            color="#00F5D4",
+                            x_label="日付",
+                            y_label="日次買い付け金額 (億円)",
+                        )
+
+                    with col_g2:
+                        st.markdown("##### 📈 CUMULATIVE FLOW & NAV TRAJECTORY")
+                        st.line_chart(
+                            daily_df.set_index("date")[["cumulative_inflow_oku", "aum_oku"]],
+                            color=["#00F5D4", "#818cf8"],
+                            x_label="日付",
+                            y_label="金額 (億円)",
+                        )
+
+                    st.markdown("##### 📋 DAILY TRANSACTION LEDGER")
+                    st.dataframe(
+                        daily_df.rename(columns={
+                            "date": "日付",
+                            "nav": "基準価額 (円)",
+                            "aum_oku": "純資産残高 (億円)",
+                            "daily_return_pct": "日次騰落率 (%)",
+                            "daily_perf_oku": "日次運用効果 (億円)",
+                            "daily_inflow_oku": "日次買い付け金額 (億円)",
+                            "cumulative_inflow_oku": "累積買い付け金額 (億円)",
+                        }),
+                        use_container_width=True,
+                        hide_index=True,
+                        height=300,
+                    )
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # TAB 6: NEEDS REVIEW FUNDS
+    # ═══════════════════════════════════════════════════════════════════════
+    with tab6:
+        st.markdown("### ⚠️ 要確認ファンド一覧 (NEEDS REVIEW)")
+        st.caption("目論見書から販社が抽出できなかったファンドや、ベンチマーク信頼度が低位のファンド一覧です。手動オーバーライドまたは再解析を実行できます。")
+
+        needs_review_funds = [r for r in records if r.needs_review]
+        if not needs_review_funds:
+            st.success("🎉 現在、要確認フラグの立っているファンドはありません。すべてのファンドの解析が完了しています。")
+        else:
+            st.warning(f"現在 **{len(needs_review_funds)} 本** のファンドが要確認状態です。")
+            nr_rows = []
+            for r in needs_review_funds:
+                reasons = []
+                if not r.benchmark or (hasattr(r.confidence, "value") and r.confidence.value == "low") or str(r.confidence).lower() == "low":
+                    reasons.append("BM低信頼度・未特定")
+                if not r.top_distributors or (hasattr(r.distributor_provenance, "value") and r.distributor_provenance.value == "synthetic") or str(r.distributor_provenance).lower() == "synthetic":
+                    reasons.append("販売会社未取得 (推計中)")
+                nr_rows.append({
+                    "順位": r.rank,
+                    "運用会社": r.management_company,
+                    "ファンド名": r.fund_name,
+                    "コード": r.fund_code,
+                    "残高 (億円)": round(r.aum / 1e8, 1),
+                    "現在のBM": r.benchmark or "—",
+                    "確認理由": " / ".join(reasons) if reasons else "要確認",
+                    "PDF有無": "あり" if r.prospectus_pdf_url else "なし",
+                })
             st.dataframe(
-                daily_df.rename(columns={
-                    "date": "日付",
-                    "nav": "基準価額 (円)",
-                    "aum_oku": "純資産残高 (億円)",
-                    "daily_return_pct": "日次騰落率 (%)",
-                    "daily_perf_oku": "日次運用効果 (億円)",
-                    "daily_inflow_oku": "日次買い付け金額 (億円)",
-                    "cumulative_inflow_oku": "累積買い付け金額 (億円)",
-                }),
+                pd.DataFrame(nr_rows),
                 use_container_width=True,
                 hide_index=True,
-                height=300,
             )
 
 

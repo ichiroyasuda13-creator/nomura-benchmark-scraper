@@ -1,0 +1,1322 @@
+{
+  "332": {
+    "CompanyCode": "332",
+    "CompanyName": "アーク証券",
+    "CompanyNameKana": "アーク",
+    "CompanyType": "1"
+  },
+  "001": {
+    "CompanyCode": "001",
+    "CompanyName": "アイザワ証券",
+    "CompanyNameKana": "アイザワショウケン",
+    "CompanyType": "1"
+  },
+  "886": {
+    "CompanyCode": "886",
+    "CompanyName": "あいち銀行",
+    "CompanyNameKana": "アイチ",
+    "CompanyType": "2"
+  },
+  "913": {
+    "CompanyCode": "913",
+    "CompanyName": "あおぞら銀行",
+    "CompanyNameKana": "アオゾラ",
+    "CompanyType": "2"
+  },
+  "834": {
+    "CompanyCode": "834",
+    "CompanyName": "青森みちのく銀行",
+    "CompanyNameKana": "アオモリミチノクギンコウ",
+    "CompanyType": "2"
+  },
+  "017": {
+    "CompanyCode": "017",
+    "CompanyName": "あかつき証券",
+    "CompanyNameKana": "アカツキ",
+    "CompanyType": "1"
+  },
+  "837": {
+    "CompanyCode": "837",
+    "CompanyName": "秋田銀行",
+    "CompanyNameKana": "アキタ",
+    "CompanyType": "2"
+  },
+  "01303": {
+    "CompanyCode": "01303",
+    "CompanyName": "朝日信用金庫",
+    "CompanyNameKana": "アサヒシンヨウキンコ",
+    "CompanyType": "2"
+  },
+  "839": {
+    "CompanyCode": "839",
+    "CompanyName": "足利銀行",
+    "CompanyNameKana": "アシカガ",
+    "CompanyType": "2"
+  },
+  "330": {
+    "CompanyCode": "330",
+    "CompanyName": "安藤証券",
+    "CompanyNameKana": "アンドウ",
+    "CompanyType": "1"
+  },
+  "844": {
+    "CompanyCode": "844",
+    "CompanyName": "池田泉州銀行",
+    "CompanyNameKana": "イケダセンシュウギンコウ",
+    "CompanyType": "2"
+  },
+  "11084": {
+    "CompanyCode": "11084",
+    "CompanyName": "池田泉州TT証券",
+    "CompanyNameKana": "イケダセンシュウティーティーショウケン",
+    "CompanyType": "1"
+  },
+  "215": {
+    "CompanyCode": "215",
+    "CompanyName": "いちよし証券",
+    "CompanyNameKana": "イチヨシ",
+    "CompanyType": "1"
+  },
+  "373": {
+    "CompanyCode": "373",
+    "CompanyName": "今村証券",
+    "CompanyNameKana": "イマムラ",
+    "CompanyType": "1"
+  },
+  "862": {
+    "CompanyCode": "862",
+    "CompanyName": "伊予銀行",
+    "CompanyNameKana": "イヨ",
+    "CompanyType": "2"
+  },
+  "222": {
+    "CompanyCode": "222",
+    "CompanyName": "岩井コスモ証券",
+    "CompanyNameKana": "イワイコスモ",
+    "CompanyType": "1"
+  },
+  "12479": {
+    "CompanyCode": "12479",
+    "CompanyName": "エービーエヌ・アムロ・クリアリング証券",
+    "CompanyNameKana": "エービーエヌ・アムロ・クリアリングショウケン",
+    "CompanyType": "1"
+  },
+  "967": {
+    "CompanyCode": "967",
+    "CompanyName": "永和証券",
+    "CompanyNameKana": "エイワショウケン",
+    "CompanyType": "1"
+  },
+  "077": {
+    "CompanyCode": "077",
+    "CompanyName": "SMBC日興証券",
+    "CompanyNameKana": "エスエムビーシーニッコウ",
+    "CompanyType": "1"
+  },
+  "007": {
+    "CompanyCode": "007",
+    "CompanyName": "ＳＢＩ証券",
+    "CompanyNameKana": "エスビーアイショウケン",
+    "CompanyType": "1"
+  },
+  "887": {
+    "CompanyCode": "887",
+    "CompanyName": "愛媛銀行",
+    "CompanyNameKana": "エヒメ",
+    "CompanyType": "2"
+  },
+  "522": {
+    "CompanyCode": "522",
+    "CompanyName": "FFG証券",
+    "CompanyNameKana": "エフエフジィ",
+    "CompanyType": "1"
+  },
+  "855": {
+    "CompanyCode": "855",
+    "CompanyName": "大垣共立銀行",
+    "CompanyNameKana": "オオガキキョウリツ",
+    "CompanyType": "2"
+  },
+  "11262": {
+    "CompanyCode": "11262",
+    "CompanyName": "OKB証券",
+    "CompanyNameKana": "オオケイビイショウケン",
+    "CompanyType": "1"
+  },
+  "008": {
+    "CompanyCode": "008",
+    "CompanyName": "岡三証券",
+    "CompanyNameKana": "オカサン",
+    "CompanyType": "1"
+  },
+  "212": {
+    "CompanyCode": "212",
+    "CompanyName": "岡三にいがた証券",
+    "CompanyNameKana": "オカサンニイガタ",
+    "CompanyType": "1"
+  },
+  "083": {
+    "CompanyCode": "083",
+    "CompanyName": "岡三ビジネス＆テクノロジー証券",
+    "CompanyNameKana": "オカサンビジネスアンドテクノロジーショウケンカブシキカイシャ",
+    "CompanyType": "1"
+  },
+  "01552": {
+    "CompanyCode": "01552",
+    "CompanyName": "岡崎信用金庫",
+    "CompanyNameKana": "オカザキシンヨウキンコ",
+    "CompanyType": "2"
+  },
+  "331": {
+    "CompanyCode": "331",
+    "CompanyName": "岡地証券",
+    "CompanyNameKana": "オカチ",
+    "CompanyType": "1"
+  },
+  "11264": {
+    "CompanyCode": "11264",
+    "CompanyName": "岡安証券",
+    "CompanyNameKana": "オカヤス",
+    "CompanyType": "1"
+  },
+  "01732": {
+    "CompanyCode": "01732",
+    "CompanyName": "おかやま信用金庫",
+    "CompanyNameKana": "オカヤマシンヨウキンコ",
+    "CompanyType": "2"
+  },
+  "966": {
+    "CompanyCode": "966",
+    "CompanyName": "おきぎん証券",
+    "CompanyNameKana": "オキギンショウケン",
+    "CompanyType": "1"
+  },
+  "814": {
+    "CompanyCode": "814",
+    "CompanyName": "沖縄銀行",
+    "CompanyNameKana": "オキナワ",
+    "CompanyType": "2"
+  },
+  "894": {
+    "CompanyCode": "894",
+    "CompanyName": "沖縄海邦銀行",
+    "CompanyNameKana": "オキナワカイホウ",
+    "CompanyType": "2"
+  },
+  "401": {
+    "CompanyCode": "401",
+    "CompanyName": "香川銀行",
+    "CompanyNameKana": "カガワギンコウ",
+    "CompanyType": "2"
+  },
+  "513": {
+    "CompanyCode": "513",
+    "CompanyName": "香川證券",
+    "CompanyNameKana": "カガワショウケン",
+    "CompanyType": "1"
+  },
+  "870": {
+    "CompanyCode": "870",
+    "CompanyName": "鹿児島銀行",
+    "CompanyNameKana": "カゴシマ",
+    "CompanyType": "2"
+  },
+  "417": {
+    "CompanyCode": "417",
+    "CompanyName": "神奈川銀行",
+    "CompanyNameKana": "カナガワ",
+    "CompanyType": "2"
+  },
+  "876": {
+    "CompanyCode": "876",
+    "CompanyName": "関西みらい銀行",
+    "CompanyNameKana": "カンサイミライギンコウ",
+    "CompanyType": "2"
+  },
+  "00191": {
+    "CompanyCode": "00191",
+    "CompanyName": "北九州銀行",
+    "CompanyNameKana": "キタキュウシュウ",
+    "CompanyType": "2"
+  },
+  "880": {
+    "CompanyCode": "880",
+    "CompanyName": "北日本銀行",
+    "CompanyNameKana": "キタニホン",
+    "CompanyType": "2"
+  },
+  "333": {
+    "CompanyCode": "333",
+    "CompanyName": "木村証券",
+    "CompanyNameKana": "キムラ",
+    "CompanyType": "1"
+  },
+  "621": {
+    "CompanyCode": "621",
+    "CompanyName": "キャピタル・パートナーズ証券",
+    "CompanyNameKana": "キャピタルパートナーズショウケン",
+    "CompanyType": "1"
+  },
+  "11429": {
+    "CompanyCode": "11429",
+    "CompanyName": "九州ＦＧ証券",
+    "CompanyNameKana": "キュウシュウエフジーショウケン",
+    "CompanyType": "1"
+  },
+  "11430": {
+    "CompanyCode": "11430",
+    "CompanyName": "京銀証券",
+    "CompanyNameKana": "キョウギンショウケン",
+    "CompanyType": "1"
+  },
+  "860": {
+    "CompanyCode": "860",
+    "CompanyName": "京都銀行",
+    "CompanyNameKana": "キョウト",
+    "CompanyType": "2"
+  },
+  "949": {
+    "CompanyCode": "949",
+    "CompanyName": "京都信用金庫",
+    "CompanyNameKana": "キョウトシンヨウキンコ",
+    "CompanyType": "2"
+  },
+  "022": {
+    "CompanyCode": "022",
+    "CompanyName": "極東証券",
+    "CompanyNameKana": "キョクトウ",
+    "CompanyType": "1"
+  },
+  "866": {
+    "CompanyCode": "866",
+    "CompanyName": "紀陽銀行",
+    "CompanyNameKana": "キヨウ",
+    "CompanyType": "2"
+  },
+  "848": {
+    "CompanyCode": "848",
+    "CompanyName": "きらぼし銀行",
+    "CompanyNameKana": "キラボシ",
+    "CompanyType": "2"
+  },
+  "11465": {
+    "CompanyCode": "11465",
+    "CompanyName": "きらぼしライフデザイン証券",
+    "CompanyNameKana": "キラボシライフデザインショウケン",
+    "CompanyType": "1"
+  },
+  "892": {
+    "CompanyCode": "892",
+    "CompanyName": "きらやか銀行",
+    "CompanyNameKana": "キラヤカ",
+    "CompanyType": "2"
+  },
+  "977": {
+    "CompanyCode": "977",
+    "CompanyName": "近畿産業信用組合",
+    "CompanyNameKana": "キンキサンギョウシンヨウクミアイ",
+    "CompanyType": "2"
+  },
+  "881": {
+    "CompanyCode": "881",
+    "CompanyName": "熊本銀行",
+    "CompanyNameKana": "クマモト",
+    "CompanyType": "2"
+  },
+  "11485": {
+    "CompanyCode": "11485",
+    "CompanyName": "ぐんぎん証券",
+    "CompanyNameKana": "グンギンショウケン",
+    "CompanyType": "1"
+  },
+  "838": {
+    "CompanyCode": "838",
+    "CompanyName": "群馬銀行",
+    "CompanyNameKana": "グンマ",
+    "CompanyType": "2"
+  },
+  "874": {
+    "CompanyCode": "874",
+    "CompanyName": "京葉銀行",
+    "CompanyNameKana": "ケイヨウ",
+    "CompanyType": "2"
+  },
+  "230": {
+    "CompanyCode": "230",
+    "CompanyName": "光世証券",
+    "CompanyNameKana": "コウセイ",
+    "CompanyType": "1"
+  },
+  "807": {
+    "CompanyCode": "807",
+    "CompanyName": "高知銀行",
+    "CompanyNameKana": "コウチ",
+    "CompanyType": "2"
+  },
+  "336": {
+    "CompanyCode": "336",
+    "CompanyName": "寿証券",
+    "CompanyNameKana": "コトブキ",
+    "CompanyType": "1"
+  },
+  "573": {
+    "CompanyCode": "573",
+    "CompanyName": "ゴールドマン・サックス証券",
+    "CompanyNameKana": "ゴールドマンサックス",
+    "CompanyType": "1"
+  },
+  "01250": {
+    "CompanyCode": "01250",
+    "CompanyName": "埼玉縣信用金庫",
+    "CompanyNameKana": "サイタマケンシンヨウキンコ",
+    "CompanyType": "2"
+  },
+  "806": {
+    "CompanyCode": "806",
+    "CompanyName": "埼玉りそな銀行",
+    "CompanyNameKana": "サイタマリソナ",
+    "CompanyType": "2"
+  },
+  "858": {
+    "CompanyCode": "858",
+    "CompanyName": "佐賀銀行",
+    "CompanyNameKana": "サガ",
+    "CompanyType": "2"
+  },
+  "857": {
+    "CompanyCode": "857",
+    "CompanyName": "三十三銀行",
+    "CompanyNameKana": "サンジュウサンギンコウ",
+    "CompanyType": "2"
+  },
+  "852": {
+    "CompanyCode": "852",
+    "CompanyName": "滋賀銀行",
+    "CompanyNameKana": "シガ",
+    "CompanyType": "2"
+  },
+  "11171": {
+    "CompanyCode": "11171",
+    "CompanyName": "四国アライアンス証券",
+    "CompanyNameKana": "シコクアライアンスショウケン",
+    "CompanyType": "1"
+  },
+  "849": {
+    "CompanyCode": "849",
+    "CompanyName": "静岡銀行",
+    "CompanyNameKana": "シズオカ",
+    "CompanyType": "2"
+  },
+  "952": {
+    "CompanyCode": "952",
+    "CompanyName": "静岡中央銀行",
+    "CompanyNameKana": "シズオカチュウオウギンコウ",
+    "CompanyType": "2"
+  },
+  "365": {
+    "CompanyCode": "365",
+    "CompanyName": "静岡東海証券",
+    "CompanyNameKana": "シズオカトウカイ",
+    "CompanyType": "1"
+  },
+  "431": {
+    "CompanyCode": "431",
+    "CompanyName": "静銀ティーエム証券",
+    "CompanyNameKana": "シズギンティーエム",
+    "CompanyType": "1"
+  },
+  "842": {
+    "CompanyCode": "842",
+    "CompanyName": "七十七銀行",
+    "CompanyNameKana": "シチジュウシチ",
+    "CompanyType": "2"
+  },
+  "11647": {
+    "CompanyCode": "11647",
+    "CompanyName": "七十七証券",
+    "CompanyNameKana": "シチジュウシチショウケン",
+    "CompanyType": "1"
+  },
+  "571": {
+    "CompanyCode": "571",
+    "CompanyName": "シティグループ証券",
+    "CompanyNameKana": "シティグループショウケン",
+    "CompanyType": "1"
+  },
+  "845": {
+    "CompanyCode": "845",
+    "CompanyName": "清水銀行",
+    "CompanyNameKana": "シミズ",
+    "CompanyType": "2"
+  },
+  "836": {
+    "CompanyCode": "836",
+    "CompanyName": "荘内銀行",
+    "CompanyNameKana": "ショウナイギンコウ",
+    "CompanyType": "2"
+  },
+  "327": {
+    "CompanyCode": "327",
+    "CompanyName": "荘内証券",
+    "CompanyNameKana": "ショウナイショウケン",
+    "CompanyType": "1"
+  },
+  "815": {
+    "CompanyCode": "815",
+    "CompanyName": "信金中央金庫",
+    "CompanyNameKana": "シンキンチュウオウキンコ",
+    "CompanyType": "2"
+  },
+  "375": {
+    "CompanyCode": "375",
+    "CompanyName": "しん証券さかもと",
+    "CompanyNameKana": "シンショウケンサカモト",
+    "CompanyType": "1"
+  },
+  "11727": {
+    "CompanyCode": "11727",
+    "CompanyName": "GMOクリック証券",
+    "CompanyNameKana": "ジーエムオークリックショウケン",
+    "CompanyType": "1"
+  },
+  "020": {
+    "CompanyCode": "020",
+    "CompanyName": "Ｊトラストグローバル証券（ＪＴＧ証券）",
+    "CompanyNameKana": "ジェイトラストグローバルショウケン",
+    "CompanyType": "1"
+  },
+  "987": {
+    "CompanyCode": "987",
+    "CompanyName": "JPモルガン証券",
+    "CompanyNameKana": "ジェイピーモルガンショウケン",
+    "CompanyType": "1"
+  },
+  "11717": {
+    "CompanyCode": "11717",
+    "CompanyName": "ジェフリーズ証券",
+    "CompanyNameKana": "ジェフリーズショウケン",
+    "CompanyType": "1"
+  },
+  "829": {
+    "CompanyCode": "829",
+    "CompanyName": "十八親和銀行",
+    "CompanyNameKana": "ジュウハチシンワギンコウ",
+    "CompanyType": "2"
+  },
+  "854": {
+    "CompanyCode": "854",
+    "CompanyName": "十六銀行",
+    "CompanyNameKana": "ジュウロクギンコウ",
+    "CompanyType": "2"
+  },
+  "11737": {
+    "CompanyCode": "11737",
+    "CompanyName": "十六ＴＴ証券",
+    "CompanyNameKana": "ジュウロクティ－ティ－ショウケン",
+    "CompanyType": "1"
+  },
+  "833": {
+    "CompanyCode": "833",
+    "CompanyName": "常陽銀行",
+    "CompanyNameKana": "ジョウヨウギンコウ",
+    "CompanyType": "2"
+  },
+  "787": {
+    "CompanyCode": "787",
+    "CompanyName": "スターツ証券",
+    "CompanyNameKana": "スターツ",
+    "CompanyType": "1"
+  },
+  "11767": {
+    "CompanyCode": "11767",
+    "CompanyName": "スマートプラス",
+    "CompanyNameKana": "スマートプラス",
+    "CompanyType": "1"
+  },
+  "846": {
+    "CompanyCode": "846",
+    "CompanyName": "スルガ銀行",
+    "CompanyNameKana": "スルガ",
+    "CompanyType": "2"
+  },
+  "413": {
+    "CompanyCode": "413",
+    "CompanyName": "仙台銀行",
+    "CompanyNameKana": "センダイ",
+    "CompanyType": "2"
+  },
+  "933": {
+    "CompanyCode": "933",
+    "CompanyName": "セントラル短資",
+    "CompanyNameKana": "セントラルタンシ",
+    "CompanyType": "4"
+  },
+  "902": {
+    "CompanyCode": "902",
+    "CompanyName": "ソシエテ・ジェネラル証券",
+    "CompanyNameKana": "ソシエテ・ジェネラルショウケンカブ",
+    "CompanyType": "1"
+  },
+  "961": {
+    "CompanyCode": "961",
+    "CompanyName": "ソニー銀行",
+    "CompanyNameKana": "ソニーギンコウ",
+    "CompanyType": "2"
+  },
+  "962": {
+    "CompanyCode": "962",
+    "CompanyName": "ソニー生命保険",
+    "CompanyNameKana": "ソニーセイメイ",
+    "CompanyType": "3"
+  },
+  "430": {
+    "CompanyCode": "430",
+    "CompanyName": "損害保険ジャパン",
+    "CompanyNameKana": "ソンガイホケンジャパン",
+    "CompanyType": "3"
+  },
+  "825": {
+    "CompanyCode": "825",
+    "CompanyName": "但馬銀行",
+    "CompanyNameKana": "タジマ",
+    "CompanyType": "2"
+  },
+  "060": {
+    "CompanyCode": "060",
+    "CompanyName": "立花証券",
+    "CompanyNameKana": "タチバナ",
+    "CompanyType": "1"
+  },
+  "950": {
+    "CompanyCode": "950",
+    "CompanyName": "第一勧業信用組合",
+    "CompanyNameKana": "ダイイチカンギョウシンヨウクミアイ",
+    "CompanyType": "2"
+  },
+  "404": {
+    "CompanyCode": "404",
+    "CompanyName": "第一生命保険",
+    "CompanyNameKana": "ダイイチセイメイ",
+    "CompanyType": "3"
+  },
+  "525": {
+    "CompanyCode": "525",
+    "CompanyName": "大熊本証券",
+    "CompanyNameKana": "ダイクマモト",
+    "CompanyType": "1"
+  },
+  "871": {
+    "CompanyCode": "871",
+    "CompanyName": "大光銀行",
+    "CompanyNameKana": "ダイコウ",
+    "CompanyType": "2"
+  },
+  "851": {
+    "CompanyCode": "851",
+    "CompanyName": "第四北越銀行",
+    "CompanyNameKana": "ダイシホクエツギンコウ",
+    "CompanyType": "2"
+  },
+  "207": {
+    "CompanyCode": "207",
+    "CompanyName": "第四北越証券",
+    "CompanyNameKana": "ダイシホクエツショウケン",
+    "CompanyType": "1"
+  },
+  "418": {
+    "CompanyCode": "418",
+    "CompanyName": "大東銀行",
+    "CompanyNameKana": "ダイトウ",
+    "CompanyType": "2"
+  },
+  "11553": {
+    "CompanyCode": "11553",
+    "CompanyName": "大和コネクト証券",
+    "CompanyNameKana": "ダイワコネクト",
+    "CompanyType": "1"
+  },
+  "756": {
+    "CompanyCode": "756",
+    "CompanyName": "大和証券",
+    "CompanyNameKana": "ダイワショウケン",
+    "CompanyType": "1"
+  },
+  "899": {
+    "CompanyCode": "899",
+    "CompanyName": "筑邦銀行",
+    "CompanyNameKana": "チクホウ",
+    "CompanyType": "2"
+  },
+  "832": {
+    "CompanyCode": "832",
+    "CompanyName": "千葉銀行",
+    "CompanyNameKana": "チバ",
+    "CompanyType": "2"
+  },
+  "030": {
+    "CompanyCode": "030",
+    "CompanyName": "ちばぎん証券",
+    "CompanyNameKana": "チバギンショウケン",
+    "CompanyType": "1"
+  },
+  "432": {
+    "CompanyCode": "432",
+    "CompanyName": "千葉興業銀行",
+    "CompanyNameKana": "チバコウギョウ",
+    "CompanyType": "2"
+  },
+  "983": {
+    "CompanyCode": "983",
+    "CompanyName": "中銀証券",
+    "CompanyNameKana": "チュウギンショウケン",
+    "CompanyType": "1"
+  },
+  "841": {
+    "CompanyCode": "841",
+    "CompanyName": "中国銀行",
+    "CompanyNameKana": "チュウゴク",
+    "CompanyType": "2"
+  },
+  "847": {
+    "CompanyCode": "847",
+    "CompanyName": "筑波銀行",
+    "CompanyNameKana": "ツクバ",
+    "CompanyType": "2"
+  },
+  "133": {
+    "CompanyCode": "133",
+    "CompanyName": "東海東京証券",
+    "CompanyNameKana": "トウカイトウキョウショウケン",
+    "CompanyType": "1"
+  },
+  "945": {
+    "CompanyCode": "945",
+    "CompanyName": "東京海上日動火災保険",
+    "CompanyNameKana": "トウキョウカイジョウニチドウカサイホケン",
+    "CompanyType": "3"
+  },
+  "973": {
+    "CompanyCode": "973",
+    "CompanyName": "東京スター銀行",
+    "CompanyNameKana": "トウキョウスター",
+    "CompanyType": "2"
+  },
+  "173": {
+    "CompanyCode": "173",
+    "CompanyName": "東武証券",
+    "CompanyNameKana": "トウブ",
+    "CompanyType": "1"
+  },
+  "812": {
+    "CompanyCode": "812",
+    "CompanyName": "東北銀行",
+    "CompanyNameKana": "トウホク",
+    "CompanyType": "2"
+  },
+  "100": {
+    "CompanyCode": "100",
+    "CompanyName": "東洋証券",
+    "CompanyNameKana": "トウヨウ",
+    "CompanyType": "1"
+  },
+  "976": {
+    "CompanyCode": "976",
+    "CompanyName": "東和銀行",
+    "CompanyNameKana": "トウワギンコウ",
+    "CompanyType": "2"
+  },
+  "895": {
+    "CompanyCode": "895",
+    "CompanyName": "徳島大正銀行",
+    "CompanyNameKana": "トクシマタイショウギンコウ",
+    "CompanyType": "2"
+  },
+  "884": {
+    "CompanyCode": "884",
+    "CompanyName": "栃木銀行",
+    "CompanyNameKana": "トチギ",
+    "CompanyType": "2"
+  },
+  "180": {
+    "CompanyCode": "180",
+    "CompanyName": "とちぎんＴＴ証券",
+    "CompanyNameKana": "トチギンティティショウケン",
+    "CompanyType": "1"
+  },
+  "861": {
+    "CompanyCode": "861",
+    "CompanyName": "鳥取銀行",
+    "CompanyNameKana": "トットリ",
+    "CompanyType": "2"
+  },
+  "427": {
+    "CompanyCode": "427",
+    "CompanyName": "トマト銀行",
+    "CompanyNameKana": "トマト",
+    "CompanyType": "2"
+  },
+  "407": {
+    "CompanyCode": "407",
+    "CompanyName": "富山銀行",
+    "CompanyNameKana": "トヤマ",
+    "CompanyType": "2"
+  },
+  "893": {
+    "CompanyCode": "893",
+    "CompanyName": "富山第一銀行",
+    "CompanyNameKana": "トヤマダイイチ",
+    "CompanyType": "2"
+  },
+  "250": {
+    "CompanyCode": "250",
+    "CompanyName": "内藤証券",
+    "CompanyNameKana": "ナイトウ",
+    "CompanyType": "1"
+  },
+  "072": {
+    "CompanyCode": "072",
+    "CompanyName": "中原証券",
+    "CompanyNameKana": "ナカハラ",
+    "CompanyType": "1"
+  },
+  "974": {
+    "CompanyCode": "974",
+    "CompanyName": "長崎銀行",
+    "CompanyNameKana": "ナガサキギンコウ",
+    "CompanyType": "2"
+  },
+  "416": {
+    "CompanyCode": "416",
+    "CompanyName": "名古屋銀行",
+    "CompanyNameKana": "ナゴヤ",
+    "CompanyType": "2"
+  },
+  "905": {
+    "CompanyCode": "905",
+    "CompanyName": "南都銀行",
+    "CompanyNameKana": "ナント",
+    "CompanyType": "2"
+  },
+  "312": {
+    "CompanyCode": "312",
+    "CompanyName": "南都まほろば証券",
+    "CompanyNameKana": "ナントマホロバショウケン",
+    "CompanyType": "1"
+  },
+  "828": {
+    "CompanyCode": "828",
+    "CompanyName": "西日本シティ銀行",
+    "CompanyNameKana": "ニシニッポンシティギンコウ",
+    "CompanyType": "2"
+  },
+  "984": {
+    "CompanyCode": "984",
+    "CompanyName": "西日本シティＴＴ証券",
+    "CompanyNameKana": "ニシニッポンシティティーティーショウケン",
+    "CompanyType": "1"
+  },
+  "080": {
+    "CompanyCode": "080",
+    "CompanyName": "日産証券",
+    "CompanyNameKana": "ニッサンショウケン",
+    "CompanyType": "1"
+  },
+  "805": {
+    "CompanyCode": "805",
+    "CompanyName": "日本生命保険相互会社",
+    "CompanyNameKana": "ニホンセイメイホケン",
+    "CompanyType": "3"
+  },
+  "086": {
+    "CompanyCode": "086",
+    "CompanyName": "野村證券",
+    "CompanyNameKana": "ノムラ",
+    "CompanyType": "1"
+  },
+  "985": {
+    "CompanyCode": "985",
+    "CompanyName": "野村信託銀行",
+    "CompanyNameKana": "ノムラシンタクギンコウ",
+    "CompanyType": "2"
+  },
+  "200": {
+    "CompanyCode": "200",
+    "CompanyName": "八十二証券",
+    "CompanyNameKana": "ハチジュウニショウケン",
+    "CompanyType": "1"
+  },
+  "840": {
+    "CompanyCode": "840",
+    "CompanyName": "八十二長野銀行",
+    "CompanyNameKana": "ハチジュウニナガノギンコウ",
+    "CompanyType": "2"
+  },
+  "979": {
+    "CompanyCode": "979",
+    "CompanyName": "浜銀TT証券",
+    "CompanyNameKana": "ハマギンティーティーショウケン",
+    "CompanyType": "1"
+  },
+  "12410": {
+    "CompanyCode": "12410",
+    "CompanyName": "バークレイズ証券",
+    "CompanyNameKana": "バークレイズ",
+    "CompanyType": "1"
+  },
+  "971": {
+    "CompanyCode": "971",
+    "CompanyName": "ばんせい証券",
+    "CompanyNameKana": "バンセイ",
+    "CompanyType": "1"
+  },
+  "387": {
+    "CompanyCode": "387",
+    "CompanyName": "光証券",
+    "CompanyNameKana": "ヒカリ",
+    "CompanyType": "1"
+  },
+  "00525": {
+    "CompanyCode": "00525",
+    "CompanyName": "東日本銀行",
+    "CompanyNameKana": "ヒガシニホン",
+    "CompanyType": "2"
+  },
+  "819": {
+    "CompanyCode": "819",
+    "CompanyName": "肥後銀行",
+    "CompanyNameKana": "ヒゴ",
+    "CompanyType": "2"
+  },
+  "856": {
+    "CompanyCode": "856",
+    "CompanyName": "百五銀行",
+    "CompanyNameKana": "ヒャクゴ",
+    "CompanyType": "2"
+  },
+  "982": {
+    "CompanyCode": "982",
+    "CompanyName": "百五証券",
+    "CompanyNameKana": "ヒャクゴショウケン",
+    "CompanyType": "1"
+  },
+  "863": {
+    "CompanyCode": "863",
+    "CompanyName": "百十四銀行",
+    "CompanyNameKana": "ヒャクジュウシ",
+    "CompanyType": "2"
+  },
+  "500": {
+    "CompanyCode": "500",
+    "CompanyName": "ひろぎん証券",
+    "CompanyNameKana": "ヒロギンショウケン",
+    "CompanyType": "1"
+  },
+  "850": {
+    "CompanyCode": "850",
+    "CompanyName": "広島銀行",
+    "CompanyNameKana": "ヒロシマ",
+    "CompanyType": "2"
+  },
+  "986": {
+    "CompanyCode": "986",
+    "CompanyName": "広島信用金庫",
+    "CompanyNameKana": "ヒロシマシンキン",
+    "CompanyType": "2"
+  },
+  "260": {
+    "CompanyCode": "260",
+    "CompanyName": "広田証券",
+    "CompanyNameKana": "ヒロタ",
+    "CompanyType": "1"
+  },
+  "618": {
+    "CompanyCode": "618",
+    "CompanyName": "BNPパリバ証券",
+    "CompanyNameKana": "ビーエヌピーパリバ",
+    "CompanyType": "1"
+  },
+  "550": {
+    "CompanyCode": "550",
+    "CompanyName": "BofA証券",
+    "CompanyNameKana": "ビーオブエーショウケン",
+    "CompanyType": "1"
+  },
+  "781": {
+    "CompanyCode": "781",
+    "CompanyName": "ＰＷＭ日本証券",
+    "CompanyNameKana": "ピーダブルエムニホンショウケン",
+    "CompanyType": "1"
+  },
+  "073": {
+    "CompanyCode": "073",
+    "CompanyName": "フィリップ証券",
+    "CompanyNameKana": "フィリップ",
+    "CompanyType": "1"
+  },
+  "958": {
+    "CompanyCode": "958",
+    "CompanyName": "ＦＩＮＸ　Ｊ証券",
+    "CompanyNameKana": "フィンクス　ジェーショウケン",
+    "CompanyType": "1"
+  },
+  "868": {
+    "CompanyCode": "868",
+    "CompanyName": "福岡銀行",
+    "CompanyNameKana": "フクオカ",
+    "CompanyType": "2"
+  },
+  "965": {
+    "CompanyCode": "965",
+    "CompanyName": "福岡中央銀行",
+    "CompanyNameKana": "フクオカチュウオウギンコウ",
+    "CompanyType": "2"
+  },
+  "873": {
+    "CompanyCode": "873",
+    "CompanyName": "福島銀行",
+    "CompanyNameKana": "フクシマ",
+    "CompanyType": "2"
+  },
+  "959": {
+    "CompanyCode": "959",
+    "CompanyName": "二浪証券",
+    "CompanyNameKana": "フタナミショウケン",
+    "CompanyType": "1"
+  },
+  "01560": {
+    "CompanyCode": "01560",
+    "CompanyName": "碧海信用金庫",
+    "CompanyNameKana": "ヘキカイシンヨウキンコ",
+    "CompanyType": "2"
+  },
+  "00033": {
+    "CompanyCode": "00033",
+    "CompanyName": "PayPay銀行",
+    "CompanyNameKana": "ペイペイギンコウ",
+    "CompanyType": "2"
+  },
+  "12960": {
+    "CompanyCode": "12960",
+    "CompanyName": "PayPay証券",
+    "CompanyNameKana": "ペイペイショウケン",
+    "CompanyType": "1"
+  },
+  "878": {
+    "CompanyCode": "878",
+    "CompanyName": "豊和銀行",
+    "CompanyNameKana": "ホウワ",
+    "CompanyType": "2"
+  },
+  "824": {
+    "CompanyCode": "824",
+    "CompanyName": "北都銀行",
+    "CompanyNameKana": "ホクト",
+    "CompanyType": "2"
+  },
+  "12538": {
+    "CompanyCode": "12538",
+    "CompanyName": "ほくほくTT証券",
+    "CompanyNameKana": "ホクホクティーティーショウケンカブシキカイシャ",
+    "CompanyType": "1"
+  },
+  "415": {
+    "CompanyCode": "415",
+    "CompanyName": "北洋銀行",
+    "CompanyNameKana": "ホクヨウ",
+    "CompanyType": "2"
+  },
+  "320": {
+    "CompanyCode": "320",
+    "CompanyName": "北洋証券",
+    "CompanyNameKana": "ホクヨウショウケン",
+    "CompanyType": "1"
+  },
+  "423": {
+    "CompanyCode": "423",
+    "CompanyName": "北陸銀行",
+    "CompanyNameKana": "ホクリク",
+    "CompanyType": "2"
+  },
+  "853": {
+    "CompanyCode": "853",
+    "CompanyName": "北海道銀行",
+    "CompanyNameKana": "ホッカイドウ",
+    "CompanyType": "2"
+  },
+  "408": {
+    "CompanyCode": "408",
+    "CompanyName": "北國銀行",
+    "CompanyNameKana": "ホッコク",
+    "CompanyType": "2"
+  },
+  "102": {
+    "CompanyCode": "102",
+    "CompanyName": "松井証券",
+    "CompanyNameKana": "マツイショウケン",
+    "CompanyType": "1"
+  },
+  "771": {
+    "CompanyCode": "771",
+    "CompanyName": "マネックス証券",
+    "CompanyNameKana": "マネックス",
+    "CompanyType": "1"
+  },
+  "108": {
+    "CompanyCode": "108",
+    "CompanyName": "丸三証券",
+    "CompanyNameKana": "マルサン",
+    "CompanyType": "1"
+  },
+  "282": {
+    "CompanyCode": "282",
+    "CompanyName": "丸近証券",
+    "CompanyNameKana": "マルチカショウケン",
+    "CompanyType": "1"
+  },
+  "357": {
+    "CompanyCode": "357",
+    "CompanyName": "丸八証券",
+    "CompanyNameKana": "マルハチ",
+    "CompanyType": "1"
+  },
+  "115": {
+    "CompanyCode": "115",
+    "CompanyName": "三木証券",
+    "CompanyNameKana": "ミキ",
+    "CompanyType": "1"
+  },
+  "538": {
+    "CompanyCode": "538",
+    "CompanyName": "みずほ証券",
+    "CompanyNameKana": "ミズホ",
+    "CompanyType": "1"
+  },
+  "802": {
+    "CompanyCode": "802",
+    "CompanyName": "みずほ銀行",
+    "CompanyNameKana": "ミズホギンコウ",
+    "CompanyType": "2"
+  },
+  "811": {
+    "CompanyCode": "811",
+    "CompanyName": "みずほコーポレート銀行",
+    "CompanyNameKana": "ミズホコーポレートギンコウ",
+    "CompanyType": "2"
+  },
+  "980": {
+    "CompanyCode": "980",
+    "CompanyName": "みずほ信託銀行",
+    "CompanyNameKana": "ミズホシンタクギンコウ",
+    "CompanyType": "2"
+  },
+  "919": {
+    "CompanyCode": "919",
+    "CompanyName": "三井住友銀行",
+    "CompanyNameKana": "ミツイスミトモ",
+    "CompanyType": "2"
+  },
+  "896": {
+    "CompanyCode": "896",
+    "CompanyName": "三井住友海上火災保険",
+    "CompanyNameKana": "ミツイスミトモカイジョウカサイ",
+    "CompanyType": "3"
+  },
+  "823": {
+    "CompanyCode": "823",
+    "CompanyName": "三井住友信託銀行",
+    "CompanyNameKana": "ミツイスミトモシンタク",
+    "CompanyType": "2"
+  },
+  "785": {
+    "CompanyCode": "785",
+    "CompanyName": "三菱UFJ eスマート証券",
+    "CompanyNameKana": "ミツビシユーエフジェイイースマートショウケン",
+    "CompanyType": "1"
+  },
+  "804": {
+    "CompanyCode": "804",
+    "CompanyName": "三菱UFJ銀行",
+    "CompanyNameKana": "ミツビシユーエフジェイギンコウ",
+    "CompanyType": "2"
+  },
+  "406": {
+    "CompanyCode": "406",
+    "CompanyName": "三菱UFJ信託銀行",
+    "CompanyNameKana": "ミツビシユーエフジェイシンタク",
+    "CompanyType": "2"
+  },
+  "122": {
+    "CompanyCode": "122",
+    "CompanyName": "三菱UFJモルガン・スタンレー証券",
+    "CompanyNameKana": "ミツビシユーエフジェイモルガンスタンレー",
+    "CompanyType": "1"
+  },
+  "118": {
+    "CompanyCode": "118",
+    "CompanyName": "水戸証券",
+    "CompanyNameKana": "ミト",
+    "CompanyType": "1"
+  },
+  "402": {
+    "CompanyCode": "402",
+    "CompanyName": "みなと銀行",
+    "CompanyNameKana": "ミナト",
+    "CompanyType": "2"
+  },
+  "897": {
+    "CompanyCode": "897",
+    "CompanyName": "南日本銀行",
+    "CompanyNameKana": "ミナミニッポン",
+    "CompanyType": "2"
+  },
+  "869": {
+    "CompanyCode": "869",
+    "CompanyName": "宮崎銀行",
+    "CompanyNameKana": "ミヤザキ",
+    "CompanyType": "2"
+  },
+  "879": {
+    "CompanyCode": "879",
+    "CompanyName": "宮崎太陽銀行",
+    "CompanyNameKana": "ミヤザキタイヨウ",
+    "CompanyType": "2"
+  },
+  "12240": {
+    "CompanyCode": "12240",
+    "CompanyName": "moomoo証券",
+    "CompanyNameKana": "ムームーショウケンカブシキガイシヤ",
+    "CompanyType": "1"
+  },
+  "063": {
+    "CompanyCode": "063",
+    "CompanyName": "むさし証券",
+    "CompanyNameKana": "ムサシショウケン",
+    "CompanyType": "1"
+  },
+  "817": {
+    "CompanyCode": "817",
+    "CompanyName": "武蔵野銀行",
+    "CompanyNameKana": "ムサシノ",
+    "CompanyType": "2"
+  },
+  "972": {
+    "CompanyCode": "972",
+    "CompanyName": "明和證券",
+    "CompanyNameKana": "メイワショウケン",
+    "CompanyType": "1"
+  },
+  "978": {
+    "CompanyCode": "978",
+    "CompanyName": "めぶき証券",
+    "CompanyNameKana": "メブキショウケン",
+    "CompanyType": "1"
+  },
+  "964": {
+    "CompanyCode": "964",
+    "CompanyName": "もみじ銀行",
+    "CompanyNameKana": "モミジ",
+    "CompanyType": "2"
+  },
+  "575": {
+    "CompanyCode": "575",
+    "CompanyName": "モルガン・スタンレーＭＵＦＧ証券",
+    "CompanyNameKana": "モルガンスタンレーエムユーエフジー",
+    "CompanyType": "1"
+  },
+  "400": {
+    "CompanyCode": "400",
+    "CompanyName": "山形銀行",
+    "CompanyNameKana": "ヤマガタギンコウ",
+    "CompanyType": "2"
+  },
+  "827": {
+    "CompanyCode": "827",
+    "CompanyName": "山口銀行",
+    "CompanyNameKana": "ヤマグチ",
+    "CompanyType": "2"
+  },
+  "865": {
+    "CompanyCode": "865",
+    "CompanyName": "山梨中央銀行",
+    "CompanyNameKana": "ヤマナシチュウオウ",
+    "CompanyType": "2"
+  },
+  "132": {
+    "CompanyCode": "132",
+    "CompanyName": "山和証券",
+    "CompanyNameKana": "ヤマワ",
+    "CompanyType": "1"
+  },
+  "721": {
+    "CompanyCode": "721",
+    "CompanyName": "ＵＢＳ証券",
+    "CompanyNameKana": "ユービーエス",
+    "CompanyType": "1"
+  },
+  "954": {
+    "CompanyCode": "954",
+    "CompanyName": "ゆうちょ銀行",
+    "CompanyNameKana": "ユウチョ",
+    "CompanyType": "5"
+  },
+  "360": {
+    "CompanyCode": "360",
+    "CompanyName": "豊証券",
+    "CompanyNameKana": "ユタカ",
+    "CompanyType": "1"
+  },
+  "831": {
+    "CompanyCode": "831",
+    "CompanyName": "横浜銀行",
+    "CompanyNameKana": "ヨコハマ",
+    "CompanyType": "2"
+  },
+  "816": {
+    "CompanyCode": "816",
+    "CompanyName": "横浜信用金庫",
+    "CompanyNameKana": "ヨコハマシンヨウ",
+    "CompanyType": "2"
+  },
+  "762": {
+    "CompanyCode": "762",
+    "CompanyName": "楽天証券",
+    "CompanyNameKana": "ラクテンショウケン",
+    "CompanyType": "1"
+  },
+  "177": {
+    "CompanyCode": "177",
+    "CompanyName": "リーディング証券",
+    "CompanyNameKana": "リ－ディング",
+    "CompanyType": "1"
+  },
+  "803": {
+    "CompanyCode": "803",
+    "CompanyName": "りそな銀行",
+    "CompanyNameKana": "リソナ",
+    "CompanyType": "2"
+  },
+  "116": {
+    "CompanyCode": "116",
+    "CompanyName": "リテラ・クレア証券",
+    "CompanyNameKana": "リテラクレア",
+    "CompanyType": "1"
+  },
+  "830": {
+    "CompanyCode": "830",
+    "CompanyName": "琉球銀行",
+    "CompanyNameKana": "リュウキュウ",
+    "CompanyType": "2"
+  },
+  "809": {
+    "CompanyCode": "809",
+    "CompanyName": "労働金庫連合会",
+    "CompanyNameKana": "ロウドウキンコレンゴウカイ",
+    "CompanyType": "2"
+  },
+  "981": {
+    "CompanyCode": "981",
+    "CompanyName": "ワイエム証券",
+    "CompanyNameKana": "ワイエムショウケン",
+    "CompanyType": "1"
+  }
+}

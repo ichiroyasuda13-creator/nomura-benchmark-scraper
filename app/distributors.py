@@ -25,6 +25,41 @@ MAJOR_DISTRIBUTORS = [
 ]
 
 
+def resolve_distributors_from_codes(
+    company_codes: list[str],
+    master: dict[str, dict[str, Any]],
+) -> tuple[list[str], list[str], list[str]]:
+    """Resolve distributor codes against master metadata.
+
+    Returns:
+        (securities_names, bank_names, insurance_names)
+        CompanyType 1 -> securities
+        CompanyType 2, 5 -> banks
+        CompanyType 3 -> insurance
+    """
+    securities: list[str] = []
+    banks: list[str] = []
+    insurance: list[str] = []
+
+    for code in company_codes:
+        c_str = str(code).strip()
+        info = master.get(c_str)
+        if not info:
+            continue
+        name = str(info.get("CompanyName", "")).strip()
+        ctype = str(info.get("CompanyType", "")).strip()
+        if not name:
+            continue
+        if ctype == "1":
+            securities.append(name)
+        elif ctype in ("2", "5"):
+            banks.append(name)
+        elif ctype == "3":
+            insurance.append(name)
+
+    return securities, banks, insurance
+
+
 def resolve_fund_distributors(
     fund_name: str,
     management_company: str = "野村アセットマネジメント",
@@ -111,22 +146,22 @@ def get_funds_grouped_by_distributor(records: Sequence[Any]) -> dict[str, list[d
         fund_name = getattr(r, "fund_name", "")
         company = getattr(r, "management_company", "野村アセットマネジメント")
         aum = getattr(r, "aum", 0.0)
-        inflow = getattr(r, "estimated_net_inflow", 0.0)
         bm = getattr(r, "benchmark", "") or "—"
         is_msci = getattr(r, "is_msci", False)
         theme = getattr(r, "theme_category", "全世界・先進国株式")
         action = getattr(r, "sales_pitch_action", "提案対象")
 
         item = {
+            "fund_code": getattr(r, "fund_code", ""),
             "fund_name": fund_name,
             "management_company": company,
             "aum_oku": round(aum / 1e8, 1),
-            "inflow_oku": round(inflow / 1e8, 1),
             "benchmark": bm,
             "is_msci": is_msci,
             "theme": theme,
             "action": action,
         }
+
 
         # Check which distributors sell this fund
         for dist in MAJOR_DISTRIBUTORS:

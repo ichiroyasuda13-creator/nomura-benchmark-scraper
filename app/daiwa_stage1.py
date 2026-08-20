@@ -71,15 +71,28 @@ def run_stage1_daiwa(
             else f"https://www.daiwa-am.co.jp/funds/doc_open/fund_doc_open.php?code={fund_code}&type=1"
         )
 
+        def _to_float(val: Any) -> float | None:
+            if val is None or val == "":
+                return None
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return None
+
         funds.append(Fund(
             fund_name=fund_name,
             fund_code=fund_code,
             nam_code=fund_code,
+            management_company="大和アセットマネジメント",
             aum=net_asset,
             nav=nav,
             is_etf=is_etf,
             detail_url=detail_url,
             prospectus_pdf_url=prospectus_url,
+            return_1m=_to_float(details.get("rate_1month")),
+            return_3m=_to_float(details.get("rate_3month")),
+            return_6m=_to_float(details.get("rate_6month")),
+            return_1y=_to_float(details.get("rate_1year")),
         ))
 
     # AUM降順ソート
@@ -88,4 +101,17 @@ def run_stage1_daiwa(
     logger.info("Stage1 (Daiwa): Selected top {} funds", len(selected))
 
     save_json(target_out, [f.model_dump(mode="json") for f in selected])
+
+    from app.timeseries_store import append_snapshot
+    from datetime import date as dt_date
+    today_str = dt_date.today().isoformat()
+    for f in selected:
+        append_snapshot(
+            fund_code=f.fund_code,
+            date=today_str,
+            aum=f.aum,
+            nav=f.nav,
+        )
+
     return selected
+

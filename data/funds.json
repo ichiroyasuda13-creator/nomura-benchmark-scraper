@@ -3,7 +3,8 @@
     "fund_name": "eMAXIS Slim 全世界株式(オール・カントリー)",
     "fund_code": "253425",
     "nam_code": "253425",
-    "management_company": "野村アセットマネジメント",
+    "management_company": "三菱UFJアセットマネジメント",
+    "company_codes": [],
     "aum": 13759967163566.0,
     "aum_display": "",
     "aum_date": null,
@@ -12,6 +13,10 @@
     "is_etf": true,
     "prospectus_pdf_url": "https://www.am.mufg.jp/pdf/koumokuromi/253425.pdf",
     "rank": null,
-    "isin_code": "JP90C000HLP4"
+    "isin_code": "JP90C000HLP4",
+    "return_1m": null,
+    "return_3m": null,
+    "return_6m": null,
+    "return_1y": null
   }
 ]

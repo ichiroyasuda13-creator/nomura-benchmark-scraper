@@ -15,6 +15,15 @@ class Confidence(str, Enum):
     LOW = "low"
 
 
+class DataProvenance(str, Enum):
+    ACTUAL = "actual"
+    DERIVED = "derived"
+    ESTIMATED = "estimated"
+    SYNTHETIC = "synthetic"
+    NOT_AVAILABLE = "not_available"
+
+
+
 class FundType(str, Enum):
     INDEX = "インデックス"
     ACTIVE = "アクティブ"
@@ -63,7 +72,8 @@ class Fund(CompatibleBaseModel):
     fund_name: str
     fund_code: str
     nam_code: str = ""
-    management_company: str = "野村アセットマネジメント"
+    management_company: Optional[str] = None
+    company_codes: list[str] = Field(default_factory=list)
     aum: float = 0.0
     aum_display: str = ""
     aum_date: Optional[date] = None
@@ -73,6 +83,12 @@ class Fund(CompatibleBaseModel):
     prospectus_pdf_url: Optional[str] = None
     rank: Optional[int] = None
     isin_code: Optional[str] = None
+    return_1m: Optional[float] = None
+    return_3m: Optional[float] = None
+    return_6m: Optional[float] = None
+    return_1y: Optional[float] = None
+
+
 
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)
@@ -92,10 +108,14 @@ class BenchmarkExtraction(CompatibleBaseModel):
     theme_category: str = "全世界・先進国株式"
     top_distributors: str = ""
     primary_broker: str = ""
-    estimated_net_inflow: float = 0.0
-    performance_effect: float = 0.0
-    aum_change: float = 0.0
+    estimated_net_inflow: Optional[float] = None
+    performance_effect: Optional[float] = None
+    aum_change: Optional[float] = None
     sales_pitch_action: str = ""
+    inflow_provenance: DataProvenance = DataProvenance.NOT_AVAILABLE
+    perf_effect_provenance: DataProvenance = DataProvenance.ESTIMATED
+    distributor_provenance: DataProvenance = DataProvenance.SYNTHETIC
+    timeseries_provenance: DataProvenance = DataProvenance.NOT_AVAILABLE
     note: str = ""
     needs_review: bool = True
 
@@ -130,12 +150,17 @@ class BenchmarkRecord(CompatibleBaseModel):
     reference_index: Optional[str] = None
     confidence: Confidence = Confidence.LOW
     extraction_method: ExtractionMethod = ExtractionMethod.RULE
-    estimated_net_inflow: float = 0.0
-    performance_effect: float = 0.0
-    aum_change: float = 0.0
+    estimated_net_inflow: Optional[float] = None
+    performance_effect: Optional[float] = None
+    aum_change: Optional[float] = None
     top_distributors: str = ""
     primary_broker: str = ""
     sales_pitch_action: str = ""
+    inflow_provenance: DataProvenance = DataProvenance.NOT_AVAILABLE
+    perf_effect_provenance: DataProvenance = DataProvenance.ESTIMATED
+    distributor_provenance: DataProvenance = DataProvenance.SYNTHETIC
+    timeseries_provenance: DataProvenance = DataProvenance.NOT_AVAILABLE
+
     prospectus_pdf_url: Optional[str] = None
     source_page_detail_url: str = ""
     note: str = ""
@@ -187,6 +212,10 @@ class BenchmarkRecord(CompatibleBaseModel):
             top_distributors=extraction.top_distributors,
             primary_broker=extraction.primary_broker,
             sales_pitch_action=extraction.sales_pitch_action,
+            inflow_provenance=extraction.inflow_provenance,
+            perf_effect_provenance=extraction.perf_effect_provenance,
+            distributor_provenance=extraction.distributor_provenance,
+            timeseries_provenance=extraction.timeseries_provenance,
             prospectus_pdf_url=fund.prospectus_pdf_url,
             source_page_detail_url=fund.detail_url,
             note=extraction.note,
@@ -196,6 +225,7 @@ class BenchmarkRecord(CompatibleBaseModel):
             reviewed_at=None,
             reviewed_by=None,
         )
+
 
 
 def parse_japanese_date(value: str) -> Optional[date]:
@@ -230,8 +260,10 @@ def format_aum_oku(aum: float) -> str:
     return f"{oku:,.0f}億円"
 
 
-def format_inflow_oku(flow: float) -> str:
+def format_inflow_oku(flow: float | None) -> str:
     """Format Net Inflow with +/- sign in 億円 (hundred million yen)."""
+    if flow is None:
+        return "データ蓄積中"
     if flow == 0:
         return "±0億円"
     oku = flow / 1e8
