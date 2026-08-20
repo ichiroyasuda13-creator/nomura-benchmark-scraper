@@ -137,10 +137,10 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
     ws0.row_dimensions[1].height = 24
 
     # Summary KPI Table
-    total_aum_oku = round(sum(r.aum for r in records) / 1e8, 1) if records else 0.0
-    total_inflow_oku = round(sum(r.estimated_net_inflow for r in records) / 1e8, 1) if records else 0.0
+    total_aum_oku = round(sum((r.aum or 0.0) for r in records) / 1e8, 1) if records else 0.0
+    total_inflow_oku = round(sum((r.estimated_net_inflow or 0.0) for r in records) / 1e8, 1) if records else 0.0
     msci_funds = [r for r in records if r.is_msci]
-    msci_aum_oku = round(sum(r.aum for r in msci_funds) / 1e8, 1) if msci_funds else 0.0
+    msci_aum_oku = round(sum((r.aum or 0.0) for r in msci_funds) / 1e8, 1) if msci_funds else 0.0
     msci_share_pct = round(msci_aum_oku / total_aum_oku * 100, 1) if total_aum_oku > 0 else 0.0
 
     summary_headers = ["指標項目", "集計値"]
@@ -226,7 +226,7 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
             if col_idx == 11 and r.is_msci:
                 cell.fill = msci_yes_fill
                 cell.font = msci_yes_font
-            elif col_idx == 13 and not r.is_msci and (r.estimated_net_inflow > 0 or r.aum > 1e11):
+            elif col_idx == 13 and not r.is_msci and (((r.estimated_net_inflow or 0.0) > 0) or ((r.aum or 0.0) > 1e11)):
                 cell.fill = target_fill
                 cell.font = target_font
 
@@ -241,8 +241,8 @@ def create_styled_excel(records: list[BenchmarkRecord], filepath: Path) -> None:
     ws2.append(headers2)
     _style_header(ws2, 1, len(headers2), fill_color="0F766E")
 
-    non_msci_records = [r for r in records if not r.is_msci and r.aum > 0]
-    non_msci_records.sort(key=lambda x: (x.estimated_net_inflow, x.aum), reverse=True)
+    non_msci_records = [r for r in records if not r.is_msci and (r.aum or 0.0) > 0]
+    non_msci_records.sort(key=lambda x: (x.estimated_net_inflow or 0.0, x.aum or 0.0), reverse=True)
 
     for row_idx, r in enumerate(non_msci_records, start=2):
         oku_aum = round(r.aum / 1e8, 1)

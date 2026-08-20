@@ -568,20 +568,23 @@ def main() -> None:
 
     with cli_col2:
         # Generate styled Excel in memory for download
-        excel_buffer = io.BytesIO()
+        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         temp_excel_path = OUTPUT_DIR / f"temp_report_{int(time.time())}.xlsx"
-        create_styled_excel(records, temp_excel_path)
-        if temp_excel_path.exists():
-            with open(temp_excel_path, "rb") as f:
-                excel_bytes = f.read()
-            temp_excel_path.unlink(missing_ok=True)
-            st.download_button(
-                label="📥 EXCEL レポート (7シート) 出力",
-                data=excel_bytes,
-                file_name=f"AM_Flow_Intelligence_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-            )
+        try:
+            create_styled_excel(records, temp_excel_path)
+            if temp_excel_path.exists():
+                with open(temp_excel_path, "rb") as f:
+                    excel_bytes = f.read()
+                temp_excel_path.unlink(missing_ok=True)
+                st.download_button(
+                    label="📥 EXCEL レポート (7シート) 出力",
+                    data=excel_bytes,
+                    file_name=f"AM_Flow_Intelligence_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                )
+        except Exception as e:
+            st.caption(f"Excel準備中: {e}")
 
     # ── Phase 0 Note Banner ────────────────────────────────────────────────
     st.markdown("""
