@@ -107,9 +107,25 @@ TERMINAL_CSS = """
     --text-muted: #64748b;
 }
 
-html, body, [class*="st-"] {
-    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+html, body, .stApp {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     color: var(--text-primary);
+}
+
+/* Specific text selectors to prevent overriding Streamlit Material Icon fonts */
+.stMarkdown, .stText, label, p, h1, h2, h3, h4, h5, h6, .stSelectbox, .stSlider {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* Ensure Streamlit system icons (visibility toggle, expander arrows, etc.) render properly */
+span[data-testid="stIconMaterial"],
+[data-testid="stIcon"],
+.material-icons,
+.material-symbols-rounded,
+.material-symbols-outlined,
+button[aria-label="Show password"] span,
+button[aria-label="Hide password"] span {
+    font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
 }
 
 code, kbd, samp, pre {
