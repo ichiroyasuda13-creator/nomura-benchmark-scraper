@@ -302,7 +302,7 @@ def run_pipeline_for_company(
     """Execute scraping pipeline for a specific company."""
     if company_id == "nomura":
         from app.stage1_list import run_stage1
-        from app.stage2_prospectus import run_stage2
+        from app.stage2_pdf_url import run_stage2
         from app.stage3_download import run_stage3
         from app.stage4_extract_text import run_stage4
         from app.stage5_benchmark import run_stage5
@@ -313,19 +313,19 @@ def run_pipeline_for_company(
 
         if log_func:
             log_func(f"Stage 2: Resolving {len(funds)} prospectus URLs...")
-        funds = run_stage2(funds, force=force)
+        run_stage2(force=force, max_workers=workers)
 
         if log_func:
             log_func("Stage 3: Downloading prospectus PDFs...")
-        pdf_paths = run_stage3(funds, force=force, max_workers=workers)
+        run_stage3(force=force, max_workers=workers)
 
         if log_func:
             log_func("Stage 4: Extracting text from PDFs...")
-        txt_paths = run_stage4(pdf_paths, force=force, max_workers=workers)
+        run_stage4(force=force, max_workers=workers)
 
         if log_func:
             log_func("Stage 5: Analyzing benchmarks & distributors...")
-        records = run_stage5(funds, txt_paths, use_llm=use_llm, force=force, provider=provider, max_workers=workers)
+        records = run_stage5(use_llm=use_llm, provider=provider, max_workers=workers)
         return records
 
     elif company_id == "daiwa":
@@ -339,15 +339,15 @@ def run_pipeline_for_company(
 
         if log_func:
             log_func("Stage 3: Downloading Daiwa prospectus PDFs...")
-        pdf_paths = run_stage3(funds, force=force, max_workers=workers)
+        run_stage3(force=force, max_workers=workers)
 
         if log_func:
             log_func("Stage 4: Extracting text from Daiwa PDFs...")
-        txt_paths = run_stage4(pdf_paths, force=force, max_workers=workers)
+        run_stage4(force=force, max_workers=workers)
 
         if log_func:
             log_func("Stage 5: Analyzing benchmarks for Daiwa...")
-        records = run_stage5(funds, txt_paths, use_llm=use_llm, force=force, provider=provider, max_workers=workers)
+        records = run_stage5(use_llm=use_llm, provider=provider, max_workers=workers)
         return records
 
     elif company_id == "muam":
@@ -361,15 +361,15 @@ def run_pipeline_for_company(
 
         if log_func:
             log_func("Stage 3: Downloading MUAM prospectus PDFs...")
-        pdf_paths = run_stage3(funds, force=force, max_workers=workers)
+        run_stage3(force=force, max_workers=workers)
 
         if log_func:
             log_func("Stage 4: Extracting text from MUAM PDFs...")
-        txt_paths = run_stage4(pdf_paths, force=force, max_workers=workers)
+        run_stage4(force=force, max_workers=workers)
 
         if log_func:
             log_func("Stage 5: Analyzing benchmarks for MUAM...")
-        records = run_stage5(funds, txt_paths, use_llm=use_llm, force=force, provider=provider, max_workers=workers)
+        records = run_stage5(use_llm=use_llm, provider=provider, max_workers=workers)
         return records
 
     return []
