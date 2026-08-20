@@ -213,8 +213,8 @@ def build_broker_theme_sales_matrix(records: Sequence[Any]) -> list[dict[str, An
     for r in records:
         theme = getattr(r, "theme_category", "全世界・先進国株式")
         broker = getattr(r, "primary_broker", "野村證券")
-        inflow = getattr(r, "estimated_net_inflow", 0.0)
-        aum = getattr(r, "aum", 0.0)
+        inflow = getattr(r, "estimated_net_inflow", 0.0) or 0.0
+        aum = getattr(r, "aum", 0.0) or 0.0
 
         key = f"{broker}|{theme}"
         if key not in matrix_map:

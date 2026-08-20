@@ -54,7 +54,7 @@ def generate_product_proposals(
     for theme, info in THEME_MSCI_RECOMMENDATIONS.items():
         theme_records = [r for r in records if r.theme_category == theme]
         theme_aum = sum(r.aum for r in theme_records)
-        theme_inflow = sum(r.estimated_net_inflow for r in theme_records)
+        theme_inflow = sum((r.estimated_net_inflow or 0.0) for r in theme_records)
 
         existing_count = len(theme_records)
         msci_count = sum(1 for r in theme_records if r.is_msci)

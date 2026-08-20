@@ -870,7 +870,7 @@ def main() -> None:
                         <span style="font-size: 0.72rem; color: #94a3b8;">{prop['status']}</span>
                     </div>
                     <h4 style="margin: 0 0 8px 0; font-size: 1.1rem; color: #f8fafc;">{prop['theme']}</h4>
-                    <p style="font-size: 0.82rem; color: #cbd5e1; margin-bottom: 12px;">{prop['rational']}</p>
+                    <p style="font-size: 0.82rem; color: #cbd5e1; margin-bottom: 12px;">{prop.get('proposal_narrative', prop.get('action_plan', ''))}</p>
                     <div style="background: rgba(255,255,255,0.04); padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 8px;">
                         <b>推奨指数:</b> <code style="color: #00F5D4;">{prop['recommended_msci_index']}</code>
                     </div>
