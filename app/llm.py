@@ -89,31 +89,52 @@ def get_available_providers() -> list[dict[str, Any]]:
 
 
 
+def _get_anthropic_key() -> str:
+    import os
+    return ANTHROPIC_API_KEY if ANTHROPIC_API_KEY is not None else os.getenv("ANTHROPIC_API_KEY", "")
+
+def _get_gemini_key() -> str:
+    import os
+    return GEMINI_API_KEY if GEMINI_API_KEY is not None else os.getenv("GEMINI_API_KEY", "")
+
+def _get_openai_key() -> str:
+    import os
+    return OPENAI_API_KEY if OPENAI_API_KEY is not None else os.getenv("OPENAI_API_KEY", "")
+
+
 def llm_available(provider: str | None = None) -> bool:
     """Check if any or a specific LLM provider is configured and available."""
+    claude_k = _get_anthropic_key()
+    gemini_k = _get_gemini_key()
+    openai_k = _get_openai_key()
+
     target = (provider or LLM_PROVIDER or "auto").lower()
     if target == "anthropic":
-        return bool(ANTHROPIC_API_KEY)
+        return bool(claude_k)
     if target == "gemini":
-        return bool(GEMINI_API_KEY)
+        return bool(gemini_k)
     if target == "openai":
-        return bool(OPENAI_API_KEY)
+        return bool(openai_k)
     if target == "ollama":
         return bool(OLLAMA_BASE_URL)
     # auto: check any key
-    return bool(ANTHROPIC_API_KEY or GEMINI_API_KEY or OPENAI_API_KEY)
+    return bool(claude_k or gemini_k or openai_k)
 
 
 def resolve_active_provider(preferred: str | None = None) -> str | None:
     """Determine the active LLM provider based on preferences and availability."""
+    claude_k = _get_anthropic_key()
+    gemini_k = _get_gemini_key()
+    openai_k = _get_openai_key()
+
     target = (preferred or LLM_PROVIDER or "auto").lower()
     if target != "auto" and llm_available(target):
         return target
-    if ANTHROPIC_API_KEY:
+    if claude_k:
         return "anthropic"
-    if GEMINI_API_KEY:
+    if gemini_k:
         return "gemini"
-    if OPENAI_API_KEY:
+    if openai_k:
         return "openai"
     return None
 
@@ -130,32 +151,51 @@ def _extract_json(text: str) -> dict[str, Any]:
 
 
 def _call_anthropic(prompt: str, model: str) -> str:
+    import os
+    import app.config as cfg
+    api_key = os.getenv("ANTHROPIC_API_KEY") or cfg.ANTHROPIC_API_KEY
+    target_model = model or cfg.ANTHROPIC_MODEL or "claude-3-5-sonnet-20241022"
+
     try:
         import anthropic
-        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY, timeout=15.0)
-        message = client.messages.create(
-            model=model,
-            max_tokens=1200,
-            system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return message.content[0].text
+        client = anthropic.Anthropic(api_key=api_key, timeout=20.0)
+        try:
+            message = client.messages.create(
+                model=target_model,
+                max_tokens=1200,
+                system=SYSTEM_PROMPT,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return message.content[0].text
+        except Exception as exc:
+            if "not_found" in str(exc).lower() and target_model != "claude-3-5-sonnet-20241022":
+                message = client.messages.create(
+                    model="claude-3-5-sonnet-20241022",
+                    max_tokens=1200,
+                    system=SYSTEM_PROMPT,
+                    messages=[{"role": "user", "content": prompt}],
+                )
+                return message.content[0].text
+            raise
     except ImportError:
         # Fallback to direct HTTP
         url = "https://api.anthropic.com/v1/messages"
         headers = {
-            "x-api-key": ANTHROPIC_API_KEY,
+            "x-api-key": api_key,
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
         }
         payload = {
-            "model": model,
+            "model": target_model,
             "max_tokens": 1200,
             "system": SYSTEM_PROMPT,
             "messages": [{"role": "user", "content": prompt}],
         }
-        with httpx.Client(timeout=15.0) as client:
+        with httpx.Client(timeout=20.0) as client:
             resp = client.post(url, headers=headers, json=payload)
+            if resp.status_code == 404 and target_model != "claude-3-5-sonnet-20241022":
+                payload["model"] = "claude-3-5-sonnet-20241022"
+                resp = client.post(url, headers=headers, json=payload)
             resp.raise_for_status()
             data = resp.json()
             return data["content"][0]["text"]
@@ -163,13 +203,19 @@ def _call_anthropic(prompt: str, model: str) -> str:
 
 
 def _call_openai(prompt: str, model: str) -> str:
-    url = f"{OPENAI_BASE_URL.rstrip('/')}/chat/completions"
+    import os
+    import app.config as cfg
+    api_key = os.getenv("OPENAI_API_KEY") or cfg.OPENAI_API_KEY
+    base_url = os.getenv("OPENAI_BASE_URL") or cfg.OPENAI_BASE_URL
+    target_model = model or cfg.OPENAI_MODEL or "gpt-4o-mini"
+
+    url = f"{base_url.rstrip('/')}/chat/completions"
     headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
     payload = {
-        "model": model,
+        "model": target_model,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
@@ -177,7 +223,7 @@ def _call_openai(prompt: str, model: str) -> str:
         "temperature": 0,
         "response_format": {"type": "json_object"},
     }
-    with httpx.Client(timeout=15.0) as client:
+    with httpx.Client(timeout=20.0) as client:
         resp = client.post(url, headers=headers, json=payload)
         resp.raise_for_status()
         data = resp.json()

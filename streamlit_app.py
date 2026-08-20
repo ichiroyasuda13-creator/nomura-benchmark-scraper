@@ -498,7 +498,9 @@ def main() -> None:
             if input_gemini:
                 os.environ["GEMINI_API_KEY"] = input_gemini.strip()
                 import app.config as cfg
+                import app.llm as llm
                 cfg.GEMINI_API_KEY = input_gemini.strip()
+                llm.GEMINI_API_KEY = input_gemini.strip()
 
             input_claude = st.text_input(
                 "Anthropic Claude API Key",
@@ -510,7 +512,9 @@ def main() -> None:
             if input_claude:
                 os.environ["ANTHROPIC_API_KEY"] = input_claude.strip()
                 import app.config as cfg
+                import app.llm as llm
                 cfg.ANTHROPIC_API_KEY = input_claude.strip()
+                llm.ANTHROPIC_API_KEY = input_claude.strip()
 
             input_openai = st.text_input(
                 "OpenAI API Key",
@@ -522,7 +526,9 @@ def main() -> None:
             if input_openai:
                 os.environ["OPENAI_API_KEY"] = input_openai.strip()
                 import app.config as cfg
+                import app.llm as llm
                 cfg.OPENAI_API_KEY = input_openai.strip()
+                llm.OPENAI_API_KEY = input_openai.strip()
 
         current_gemini = os.getenv("GEMINI_API_KEY") or getattr(cfg, "GEMINI_API_KEY", "")
         current_claude = os.getenv("ANTHROPIC_API_KEY") or getattr(cfg, "ANTHROPIC_API_KEY", "")

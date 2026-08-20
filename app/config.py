@@ -31,7 +31,7 @@ def _get_secret(key: str, default: str = "") -> str:
 
 USER_AGENT = _get_secret(
     "NOMURA_USER_AGENT",
-    "NomuraBenchmarkScraper/1.0 (internal research; contact: internal)",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
 )
 REQUEST_DELAY_SEC = float(_get_secret("NOMURA_REQUEST_DELAY_SEC", "0.5"))
 MAX_FUNDS = int(_get_secret("NOMURA_MAX_FUNDS", "100"))
@@ -42,7 +42,7 @@ LLM_PROVIDER = _get_secret("LLM_PROVIDER", "auto").lower()  # auto, anthropic, o
 
 # Anthropic Claude
 ANTHROPIC_API_KEY = _get_secret("ANTHROPIC_API_KEY", "")
-ANTHROPIC_MODEL = _get_secret("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest")
+ANTHROPIC_MODEL = _get_secret("ANTHROPIC_MODEL", "claude-3-5-sonnet-20241022")
 
 # OpenAI
 OPENAI_API_KEY = _get_secret("OPENAI_API_KEY", "")
