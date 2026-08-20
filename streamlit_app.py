@@ -556,6 +556,16 @@ def main() -> None:
             format_func=lambda x: provider_display_map.get(x, x),
             index=default_idx if available_providers else 0,
         )
+        max_funds_per_company = st.slider(
+            "取得件数 / 社 (Max Funds)",
+            min_value=5,
+            max_value=50,
+            value=20,
+            step=5,
+            help="Streamlit Cloud の無料サーバー負荷を抑えるため、通常は 15〜20 件程度が推奨です。",
+        )
+        workers = 2
+
         provider_arg = selected_provider_id
         use_llm = st.toggle("LLM Inference Engine", value=True)
         force = st.toggle("Force Re-Scrape (Bypass Cache)", value=False)

@@ -35,7 +35,7 @@ USER_AGENT = _get_secret(
 )
 REQUEST_DELAY_SEC = float(_get_secret("NOMURA_REQUEST_DELAY_SEC", "0.5"))
 MAX_FUNDS = int(_get_secret("NOMURA_MAX_FUNDS", "100"))
-MAX_WORKERS = int(_get_secret("NOMURA_MAX_WORKERS", "5"))
+MAX_WORKERS = int(_get_secret("NOMURA_MAX_WORKERS", "2"))
 
 # LLM Configurations
 LLM_PROVIDER = _get_secret("LLM_PROVIDER", "auto").lower()  # auto, anthropic, openai, gemini, ollama
