@@ -466,7 +466,7 @@ def main() -> None:
         }
         selected_company_ids = []
         for cid, cname in company_options.items():
-            if st.checkbox(cname, value=(cid == "nomura"), key=f"chk_{cid}"):
+            if st.checkbox(cname, value=True, key=f"chk_{cid}"):
                 selected_company_ids.append(cid)
 
         if not selected_company_ids:
@@ -619,12 +619,16 @@ def main() -> None:
             status_text.success(f"✅ Executed {len(selected_company_ids)} Managers ({len(all_executed_records)} Total Funds Analyzed)")
             st.session_state["cached_records"] = all_executed_records
 
-    # Load data for selected companies
-    records = st.session_state.get("cached_records")
-    if not records:
-        records = load_records_for_companies(selected_company_ids)
-        if records:
-            st.session_state["cached_records"] = records
+    # Load data for selected companies dynamically
+    records = load_records_for_companies(selected_company_ids)
+    if not records and "cached_records" in st.session_state:
+        name_map = {
+            "nomura": "野村アセットマネジメント",
+            "daiwa": "大和アセットマネジメント",
+            "muam": "三菱UFJアセットマネジメント",
+        }
+        selected_names = [name_map[cid] for cid in selected_company_ids if cid in name_map]
+        records = [r for r in st.session_state["cached_records"] if r.management_company in selected_names]
 
     if not records:
         st.info("💡 サイドバーの「🚀 RUN PIPELINE」ボタンをクリックしてデータを取得してください。")
