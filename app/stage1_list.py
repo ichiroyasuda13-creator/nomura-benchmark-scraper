@@ -6,7 +6,7 @@ from typing import Any
 
 from loguru import logger
 
-from app.config import FUND_SEARCH_API, FUNDS_JSON, MAX_FUNDS
+from app.config import DATA_DIR, FUND_SEARCH_API, FUNDS_JSON, MAX_FUNDS
 from app.http_client import HttpClient, load_json, save_json
 from app.models import Fund, parse_aum_yen, parse_japanese_date
 
