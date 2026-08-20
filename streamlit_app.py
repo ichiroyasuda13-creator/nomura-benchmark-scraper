@@ -470,30 +470,75 @@ def main() -> None:
         period_days = period_info["days"]
 
         st.divider()
+        st.markdown("### 🔑 API KEY SETTINGS")
+        with st.expander("🔑 APIキー設定 (Gemini / Claude / OpenAI)", expanded=not bool(os.getenv("GEMINI_API_KEY") or os.getenv("ANTHROPIC_API_KEY"))):
+            input_gemini = st.text_input(
+                "Google Gemini API Key",
+                value=os.getenv("GEMINI_API_KEY", ""),
+                type="password",
+                placeholder="AIzaSy...",
+                help="Google AI Studio (https://aistudio.google.com/) から取得した API キーを入力してください。",
+            )
+            if input_gemini:
+                os.environ["GEMINI_API_KEY"] = input_gemini.strip()
+                import app.config as cfg
+                cfg.GEMINI_API_KEY = input_gemini.strip()
+
+            input_claude = st.text_input(
+                "Anthropic Claude API Key",
+                value=os.getenv("ANTHROPIC_API_KEY", ""),
+                type="password",
+                placeholder="sk-ant-...",
+                help="Anthropic Console から取得した API キー",
+            )
+            if input_claude:
+                os.environ["ANTHROPIC_API_KEY"] = input_claude.strip()
+                import app.config as cfg
+                cfg.ANTHROPIC_API_KEY = input_claude.strip()
+
+            input_openai = st.text_input(
+                "OpenAI API Key",
+                value=os.getenv("OPENAI_API_KEY", ""),
+                type="password",
+                placeholder="sk-...",
+                help="OpenAI Platform から取得した API キー",
+            )
+            if input_openai:
+                os.environ["OPENAI_API_KEY"] = input_openai.strip()
+                import app.config as cfg
+                cfg.OPENAI_API_KEY = input_openai.strip()
+
+        current_gemini = os.getenv("GEMINI_API_KEY") or getattr(cfg, "GEMINI_API_KEY", "")
+        current_claude = os.getenv("ANTHROPIC_API_KEY") or getattr(cfg, "ANTHROPIC_API_KEY", "")
+        current_openai = os.getenv("OPENAI_API_KEY") or getattr(cfg, "OPENAI_API_KEY", "")
+
         st.markdown("### ⚙️ SCRAPER & LLM ENGINE")
         max_funds_per_company = st.slider("ファンド取得上限 (社あたり)", min_value=5, max_value=200, value=30, step=5)
         workers = st.slider("並列ワーカー数", min_value=1, max_value=8, value=4)
 
         available_providers = get_available_providers()
         provider_display_map = {
-            p["id"]: f"{p['name']} ｜ {p['model']}" + (" 🟢" if p.get("configured") else " (未設定)")
+            p["id"]: f"{p['name']} ｜ {p['model']}" + (" 🟢 READY" if p.get("configured") else " ⚪ (未設定)")
             for p in available_providers
         }
+        # Select Gemini or Claude as default if ready
+        default_idx = 0
+        for i, p in enumerate(available_providers):
+            if p.get("configured"):
+                default_idx = i
+                break
+
         selected_provider_id = st.selectbox(
             "AI Model Provider",
             options=list(provider_display_map.keys()),
             format_func=lambda x: provider_display_map.get(x, x),
-            index=0 if available_providers else None,
+            index=default_idx if available_providers else 0,
         )
         provider_arg = selected_provider_id
         use_llm = st.toggle("LLM Inference Engine", value=True)
         force = st.toggle("Force Re-Scrape (Bypass Cache)", value=False)
 
-        current_gemini = os.getenv("GEMINI_API_KEY") or GEMINI_API_KEY
-        current_claude = os.getenv("ANTHROPIC_API_KEY") or ANTHROPIC_API_KEY
-        current_openai = os.getenv("OPENAI_API_KEY") or OPENAI_API_KEY
-
-        st.markdown("### 🔑 API GATEWAY STATUS")
+        st.markdown("### 📡 API GATEWAY STATUS")
         col_k1, col_k2 = st.columns(2)
         col_k1.caption(f"Gemini: {'🟢 READY' if current_gemini else '⚪ OFF'}")
         col_k2.caption(f"Claude: {'🟢 READY' if current_claude else '⚪ OFF'}")
