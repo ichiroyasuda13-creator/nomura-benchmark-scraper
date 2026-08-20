@@ -475,7 +475,17 @@ def main() -> None:
         workers = st.slider("並列ワーカー数", min_value=1, max_value=8, value=4)
 
         available_providers = get_available_providers()
-        provider_arg = st.selectbox("AI Model Provider", available_providers, index=0 if available_providers else None)
+        provider_display_map = {
+            p["id"]: f"{p['name']} ｜ {p['model']}" + (" 🟢" if p.get("configured") else " (未設定)")
+            for p in available_providers
+        }
+        selected_provider_id = st.selectbox(
+            "AI Model Provider",
+            options=list(provider_display_map.keys()),
+            format_func=lambda x: provider_display_map.get(x, x),
+            index=0 if available_providers else None,
+        )
+        provider_arg = selected_provider_id
         use_llm = st.toggle("LLM Inference Engine", value=True)
         force = st.toggle("Force Re-Scrape (Bypass Cache)", value=False)
 
