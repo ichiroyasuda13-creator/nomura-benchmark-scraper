@@ -81,3 +81,47 @@ def test_job_summary_reports_every_manager(
     for name, _, _ in PARTIAL:
         assert name in text
     assert "incomplete" in text
+
+
+def test_managers_expose_stable_ids() -> None:
+    ids = [key for key, _, _ in _load()._managers()]
+    assert ids == ["nomura", "daiwa", "muam"]
+
+
+def test_only_flag_runs_just_the_named_manager(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MUAM is collected on its own from Japan, so filtering must be exact."""
+    module = _load()
+    called: list[str] = []
+
+    def fake_managers() -> list[tuple[str, str, object]]:
+        def make(key: str):
+            def run() -> list[int]:
+                called.append(key)
+                return [1, 2]
+            return run
+        return [(k, k.upper(), make(k)) for k in ("nomura", "daiwa", "muam")]
+
+    monkeypatch.setattr(module, "_managers", fake_managers)
+
+    results = module.collect(["muam"])
+
+    assert called == ["muam"]
+    assert [name for name, _, _ in results] == ["MUAM"]
+
+
+def test_no_only_flag_runs_every_manager(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = _load()
+    called: list[str] = []
+
+    def fake_managers() -> list[tuple[str, str, object]]:
+        def make(key: str):
+            def run() -> list[int]:
+                called.append(key)
+                return []
+            return run
+        return [(k, k.upper(), make(k)) for k in ("nomura", "daiwa", "muam")]
+
+    monkeypatch.setattr(module, "_managers", fake_managers)
+    module.collect(None)
+
+    assert called == ["nomura", "daiwa", "muam"]

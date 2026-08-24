@@ -18,6 +18,7 @@ Notes:
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from datetime import date
@@ -30,13 +31,15 @@ from app.stage1_list import run_stage1
 MAX_FUNDS_PER_COMPANY = 100
 
 
-def _managers() -> list[tuple[str, object]]:
+def _managers() -> list[tuple[str, str, object]]:
     return [
         (
+            "nomura",
             "野村アセットマネジメント",
             lambda: run_stage1(force=True, max_funds=MAX_FUNDS_PER_COMPANY),
         ),
         (
+            "daiwa",
             "大和アセットマネジメント",
             lambda: run_stage1_daiwa(
                 force=True,
@@ -46,6 +49,7 @@ def _managers() -> list[tuple[str, object]]:
             ),
         ),
         (
+            "muam",
             "三菱UFJアセットマネジメント",
             lambda: run_stage1_muam(
                 force=True,
@@ -57,10 +61,12 @@ def _managers() -> list[tuple[str, object]]:
     ]
 
 
-def collect() -> list[tuple[str, int, str]]:
-    """Run every manager. Returns (name, fund_count, error) per manager."""
+def collect(only: list[str] | None = None) -> list[tuple[str, int, str]]:
+    """Run the selected managers. Returns (name, fund_count, error) per manager."""
     results: list[tuple[str, int, str]] = []
-    for name, runner in _managers():
+    for key, name, runner in _managers():
+        if only and key not in only:
+            continue
         try:
             funds = runner()  # type: ignore[operator]
         except Exception as exc:  # noqa: BLE001 - one dead API must not stop the rest
@@ -117,11 +123,29 @@ def report(results: list[tuple[str, int, str]], today: str) -> None:
         handle.write("\n".join(lines) + "\n")
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Append one dated AUM/NAV snapshot per fund to data/timeseries/.",
+    )
+    parser.add_argument(
+        "--only",
+        action="append",
+        choices=["nomura", "daiwa", "muam"],
+        help=(
+            "Limit to one manager; repeatable. MUAM's API returns 403 to "
+            "GitHub's runners, so it is collected from a Japanese connection "
+            "instead: --only muam"
+        ),
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = parse_args()
     ensure_dirs()
     today = date.today().isoformat()
 
-    results = collect()
+    results = collect(args.only)
     report(results, today)
 
     total = sum(count for _, count, _ in results)
