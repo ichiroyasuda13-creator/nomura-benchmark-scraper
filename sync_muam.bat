@@ -46,7 +46,9 @@ if errorlevel 1 (
 )
 
 REM Rebase onto anything the GitHub bot pushed, then publish.
-git pull --rebase origin main >> "%LOG%" 2>&1
+REM --autostash: this runs unattended on a working machine, so an
+REM unrelated edit in progress must not block publishing forever.
+git pull --rebase --autostash origin main >> "%LOG%" 2>&1
 if errorlevel 1 (
     echo   [WARN] Could not sync with GitHub. Data is saved locally
     echo          and will publish on the next successful run.
