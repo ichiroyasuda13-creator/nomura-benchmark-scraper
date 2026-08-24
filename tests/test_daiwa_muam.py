@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
+
+import pytest
 from app.daiwa_stage1 import run_stage1_daiwa
 from app.muam_stage1 import run_stage1_muam
 
@@ -59,3 +61,32 @@ def test_stage1_muam_mock(mock_get: MagicMock) -> None:
     assert "eMAXIS Slim" in funds[0].fund_name
     assert funds[0].aum == 13759967163566
     assert "253425" in funds[0].prospectus_pdf_url
+
+
+@patch("httpx.Client.get", side_effect=RuntimeError("network down"))
+def test_daiwa_falls_back_to_bundled_master_by_default(mock_get: MagicMock) -> None:
+    funds = run_stage1_daiwa(max_funds=5)
+    assert funds, "bundled master should keep the app usable when the API is down"
+
+
+@patch("httpx.Client.get", side_effect=RuntimeError("network down"))
+def test_daiwa_refuses_stale_fallback_when_disabled(mock_get: MagicMock) -> None:
+    """The daily snapshot job must fail rather than record stale AUM as today."""
+    with pytest.raises(RuntimeError, match="fallback disabled"):
+        run_stage1_daiwa(max_funds=5, allow_fallback=False)
+
+
+@patch("httpx.Client.get", side_effect=RuntimeError("network down"))
+def test_muam_refuses_stale_fallback_when_disabled(mock_get: MagicMock) -> None:
+    with pytest.raises(RuntimeError, match="fallback disabled"):
+        run_stage1_muam(max_funds=5, allow_fallback=False)
+
+
+@patch("httpx.Client.get")
+def test_muam_handles_empty_result_without_indexerror(mock_get: MagicMock) -> None:
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {"datasets": {"api00001tmCmFndSearchDetailOutDto": []}}
+    mock_resp.raise_for_status = MagicMock()
+    mock_get.return_value = mock_resp
+
+    assert run_stage1_muam(max_funds=5) == []

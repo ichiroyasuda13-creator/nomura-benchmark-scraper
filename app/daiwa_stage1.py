@@ -28,6 +28,7 @@ def run_stage1_daiwa(
     force: bool = False,
     max_funds: int = 100,
     output_path: Optional[Path] = None,
+    allow_fallback: bool = True,
 ) -> list[Fund]:
     """大和アセットマネジメントの公式JSONからAUM降順でファンド一覧を取得."""
     target_out = output_path or FUNDS_JSON
@@ -43,6 +44,10 @@ def run_stage1_daiwa(
             logger.info("Stage1 (Daiwa): Successfully fetched {} funds from live API", len(raw_funds))
     except Exception as exc:
         logger.warning("Stage1 (Daiwa): Live API request failed ({}). Attempting local fallback...", exc)
+        if not allow_fallback:
+            # The daily snapshot job must not record stale bundled AUM as
+            # today's reading -- that would fabricate a zero-flow day.
+            raise RuntimeError(f"Daiwa AM API access failed ({exc}); fallback disabled.") from exc
         if DAIWA_MASTER_FALLBACK.exists():
             data = load_json(DAIWA_MASTER_FALLBACK, {})
             raw_funds = data.get("fund", [])

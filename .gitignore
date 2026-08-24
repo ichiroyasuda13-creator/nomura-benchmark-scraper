@@ -10,3 +10,7 @@ data/text/
 logs/
 *.log
 
+
+# Intermediate fund lists written by scripts/daily_snapshot.py
+data/daiwa_funds.json
+data/muam_funds.json
