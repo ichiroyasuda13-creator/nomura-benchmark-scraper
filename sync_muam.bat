@@ -40,10 +40,11 @@ if errorlevel 1 (
     git commit -m "chore(data): append MUAM daily snapshot [skip ci]" >> "%LOG%" 2>&1
     echo   [OK] Committed.
 ) else (
-    echo   [--] Already up to date for today; nothing to commit.
-    echo   RESULT: no new data >> "%LOG%"
-    goto :done
+    echo   [--] Today's reading was already captured.
 )
+
+REM Publish even when there is nothing new today: an earlier run may have
+REM committed a reading it could not push, and that must not stay stranded.
 
 REM Rebase onto anything the GitHub bot pushed, then publish.
 REM --autostash: this runs unattended on a working machine, so an
@@ -63,7 +64,7 @@ if errorlevel 1 (
     echo   RESULT: push failed, commit held locally >> "%LOG%"
     goto :done
 )
-echo   [OK] Published to GitHub.
+echo   [OK] Up to date with GitHub.
 echo   RESULT: success >> "%LOG%"
 
 :done
