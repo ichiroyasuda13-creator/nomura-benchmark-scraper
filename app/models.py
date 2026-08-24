@@ -246,7 +246,14 @@ def parse_aum_yen(raw: float | int | str | None) -> float:
     text = str(raw).replace(",", "").strip()
     if not text:
         return 0.0
-    return float(text)
+    try:
+        return float(text)
+    except ValueError:
+        # The fund API returns placeholders ("―", "N/A") and unit-suffixed
+        # values. stage1 sorts every fund through this, so one bad cell used to
+        # abort the whole run; fall back to the leading numeric run instead.
+        match = re.search(r"-?\d+(?:\.\d+)?", text)
+        return float(match.group()) if match else 0.0
 
 
 def format_aum_oku(aum: float) -> str:

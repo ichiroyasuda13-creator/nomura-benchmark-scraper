@@ -91,15 +91,15 @@ def get_available_providers() -> list[dict[str, Any]]:
 
 def _get_anthropic_key() -> str:
     import os
-    return ANTHROPIC_API_KEY if ANTHROPIC_API_KEY is not None else os.getenv("ANTHROPIC_API_KEY", "")
+    return ANTHROPIC_API_KEY or os.getenv("ANTHROPIC_API_KEY", "")
 
 def _get_gemini_key() -> str:
     import os
-    return GEMINI_API_KEY if GEMINI_API_KEY is not None else os.getenv("GEMINI_API_KEY", "")
+    return GEMINI_API_KEY or os.getenv("GEMINI_API_KEY", "")
 
 def _get_openai_key() -> str:
     import os
-    return OPENAI_API_KEY if OPENAI_API_KEY is not None else os.getenv("OPENAI_API_KEY", "")
+    return OPENAI_API_KEY or os.getenv("OPENAI_API_KEY", "")
 
 
 def llm_available(provider: str | None = None) -> bool:

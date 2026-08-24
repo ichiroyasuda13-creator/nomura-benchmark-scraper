@@ -39,6 +39,11 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 try:
+    # Module aliases must be bound at import time. Binding them inside
+    # main() made `cfg` function-local and raised UnboundLocalError
+    # whenever no API key was entered.
+    import app.config as cfg
+    import app.llm as llm
     from app.config import (
         ANTHROPIC_API_KEY,
         BENCHMARKS_JSON,
@@ -497,8 +502,6 @@ def main() -> None:
             )
             if input_gemini:
                 os.environ["GEMINI_API_KEY"] = input_gemini.strip()
-                import app.config as cfg
-                import app.llm as llm
                 cfg.GEMINI_API_KEY = input_gemini.strip()
                 llm.GEMINI_API_KEY = input_gemini.strip()
 
@@ -511,8 +514,6 @@ def main() -> None:
             )
             if input_claude:
                 os.environ["ANTHROPIC_API_KEY"] = input_claude.strip()
-                import app.config as cfg
-                import app.llm as llm
                 cfg.ANTHROPIC_API_KEY = input_claude.strip()
                 llm.ANTHROPIC_API_KEY = input_claude.strip()
 
@@ -525,8 +526,6 @@ def main() -> None:
             )
             if input_openai:
                 os.environ["OPENAI_API_KEY"] = input_openai.strip()
-                import app.config as cfg
-                import app.llm as llm
                 cfg.OPENAI_API_KEY = input_openai.strip()
                 llm.OPENAI_API_KEY = input_openai.strip()
 
@@ -535,8 +534,6 @@ def main() -> None:
         current_openai = os.getenv("OPENAI_API_KEY") or getattr(cfg, "OPENAI_API_KEY", "")
 
         st.markdown("### ⚙️ SCRAPER & LLM ENGINE")
-        max_funds_per_company = st.slider("ファンド取得上限 (社あたり)", min_value=5, max_value=200, value=30, step=5)
-        workers = st.slider("並列ワーカー数", min_value=1, max_value=8, value=4)
 
         available_providers = get_available_providers()
         provider_display_map = {
@@ -564,7 +561,13 @@ def main() -> None:
             step=5,
             help="Streamlit Cloud の無料サーバー負荷を抑えるため、通常は 15〜20 件程度が推奨です。",
         )
-        workers = 2
+        workers = st.slider(
+            "並列ワーカー数 (Workers)",
+            min_value=1,
+            max_value=4,
+            value=2,
+            help="Streamlit Cloud の CPU 制限を超えないよう 2 を推奨。ローカル実行時は増やせます。",
+        )
 
         provider_arg = selected_provider_id
         use_llm = st.toggle("LLM Inference Engine", value=True)
@@ -578,7 +581,7 @@ def main() -> None:
 
         st.divider()
         button_label = f"🚀 RUN PIPELINE ({len(selected_company_ids)} MANAGERS)"
-        run_clicked = st.button(button_label, type="primary", use_container_width=True)
+        run_clicked = st.button(button_label, type="primary", width="stretch")
 
     # ── Run pipeline trigger ───────────────────────────────────────────────
     if run_clicked:
@@ -662,7 +665,7 @@ def main() -> None:
                     data=excel_bytes,
                     file_name=f"AM_Flow_Intelligence_{datetime.now().strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True,
+                    width="stretch",
                 )
         except Exception as e:
             st.caption(f"Excel準備中: {e}")
@@ -803,7 +806,7 @@ def main() -> None:
             theme_df = pd.DataFrame(theme_rows)
             st.dataframe(
                 theme_df,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -828,7 +831,7 @@ def main() -> None:
         targets_df = pd.DataFrame(targets_data)
         st.dataframe(
             targets_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -876,7 +879,7 @@ def main() -> None:
 
             st.dataframe(
                 d_df,
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
@@ -928,7 +931,7 @@ def main() -> None:
 
         st.dataframe(
             pd.DataFrame(table_rows),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             height=450,
         )
@@ -989,7 +992,7 @@ def main() -> None:
         ])
         st.dataframe(
             matrix_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -1131,7 +1134,7 @@ def main() -> None:
                             "daily_inflow_oku": "日次買い付け金額 (億円)",
                             "cumulative_inflow_oku": "累積買い付け金額 (億円)",
                         }),
-                        use_container_width=True,
+                        width="stretch",
                         hide_index=True,
                         height=300,
                     )
@@ -1167,7 +1170,7 @@ def main() -> None:
                 })
             st.dataframe(
                 pd.DataFrame(nr_rows),
-                use_container_width=True,
+                width="stretch",
                 hide_index=True,
             )
 
